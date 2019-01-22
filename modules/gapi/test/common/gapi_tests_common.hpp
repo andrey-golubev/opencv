@@ -12,6 +12,8 @@
 #include "opencv2/ts.hpp"
 #include "opencv2/gapi.hpp"
 
+#include "gapi_tests_helpers.hpp"
+
 namespace
 {
     inline std::ostream& operator<<(std::ostream& o, const cv::GCompileArg& arg)
@@ -43,7 +45,17 @@ public:
         return cv::Scalar(s1, s2, s3, s4);
     }
 
-    void initMatsRandU(int type, cv::Size sz_in, int dtype, bool createOutputMatrices = true)
+    void initOutMats(cv::Size sz_in, int dtype)
+    {
+        // TODO: perf tests never init output
+        if (dtype != -1)
+        {
+            out_mat_gapi = cv::Mat (sz_in, dtype);
+            out_mat_ocv = cv::Mat (sz_in, dtype);
+        }
+    }
+
+    void initMatsRandU(int type, cv::Size sz_in, int dtype, bool = false)
     {
         in_mat1 = cv::Mat(sz_in, type);
         in_mat2 = cv::Mat(sz_in, type);
@@ -52,37 +64,37 @@ public:
         cv::randu(in_mat1, cv::Scalar::all(0), cv::Scalar::all(255));
         cv::randu(in_mat2, cv::Scalar::all(0), cv::Scalar::all(255));
 
-        if (createOutputMatrices && dtype != -1)
-        {
-            out_mat_gapi = cv::Mat (sz_in, dtype);
-            out_mat_ocv = cv::Mat (sz_in, dtype);
-        }
+        initOutMats(sz_in, dtype);
     }
 
-    void initMatrixRandU(int type, cv::Size sz_in, int dtype, bool createOutputMatrices = true)
+    void initMatrixRandU(int type, cv::Size sz_in, int dtype, bool = false)
     {
         in_mat1 = cv::Mat(sz_in, type);
 
         sc = initScalarRandU(100);
-
         cv::randu(in_mat1, cv::Scalar::all(0), cv::Scalar::all(255));
 
-        if (createOutputMatrices && dtype != -1)
-        {
-            out_mat_gapi = cv::Mat (sz_in, dtype);
-            out_mat_ocv = cv::Mat (sz_in, dtype);
-        }
+        initOutMats(sz_in, dtype);
     }
 
-    void initMatsRandN(int type, cv::Size sz_in, int dtype, bool createOutputMatrices = true)
+    void initMatsRandN(int type, cv::Size sz_in, int dtype, bool = false)
     {
-        in_mat1  = cv::Mat(sz_in, type);
-        cv::randn(in_mat1, cv::Scalar::all(127), cv::Scalar::all(40.f));
+        in_mat1 = cv::Mat(sz_in, type);
+        in_mat2 = cv::Mat(sz_in, type);
 
-        if (createOutputMatrices  && dtype != -1)
+        cv::randn(in_mat1, cv::Scalar::all(127), cv::Scalar::all(40.f));
+        cv::randn(in_mat2, cv::Scalar::all(127), cv::Scalar::all(40.f));
+
+        initOutMats(sz_in, dtype);
+    }
+
+    void initRand(int type, cv::Size sz_in, int dtype, int distributionType = cv::RNG::UNIFORM)
+    {
+        switch( distributionType )
         {
-            out_mat_gapi = cv::Mat(sz_in, dtype);
-            out_mat_ocv = cv::Mat(sz_in, dtype);
+            case cv::RNG::UNIFORM: return initMatsRandU(type, sz_in, dtype);
+            case cv::RNG::NORMAL: return initMatsRandN(type, sz_in, dtype);
+            default: return;  // TODO: raise
         }
     }
 
@@ -119,6 +131,96 @@ using compare_f = std::function<bool(const cv::Mat &a, const cv::Mat &b)>;
 
 using compare_scalar_f = std::function<bool(const cv::Scalar &a, const cv::Scalar &b)>;
 
+// TODO: delete bool
+template<typename ...SpecificParams>
+class Params
+{
+public:
+    using common_params_t = std::tuple<int, int, cv::Size, int, bool, compare_f, cv::GCompileArgs>;
+    using specific_params_t = std::tuple<SpecificParams...>;
+    using params_t = std::tuple<int, int, cv::Size, int, bool, compare_f, cv::GCompileArgs,
+        SpecificParams...>;
+private:
+    common_params_t m_common;
+    specific_params_t m_specific;
+public:
+    Params& operator=(const params_t& params)
+    {
+        tuple_extensions::copyFromRange<0, std::tuple_size<common_params_t>::value>(
+            params, m_common);
+        tuple_extensions::copyFromRange<std::tuple_size<common_params_t>::value,
+            std::tuple_size<params_t>::value>(params, m_specific);
+        return *this;
+    }
+
+    const common_params_t& commonParams() const
+    {
+        return m_common;
+    }
+
+    const specific_params_t& specificParams() const
+    {
+        return m_specific;
+    }
+};
+
+template<>
+class Params<>
+{
+public:
+    using common_params_t = std::tuple<int, int, cv::Size, int, bool, compare_f, cv::GCompileArgs>;
+    using specific_params_t = std::tuple<>;
+    using params_t = common_params_t;
+private:
+    params_t m_all;
+public:
+    Params& operator=(const params_t& params)
+    {
+        m_all = params;
+        return *this;
+    }
+
+    const common_params_t& commonParams() const
+    {
+        return m_all;
+    }
+};
+
+template<typename ...SpecificParams>
+class TestWithParamBase : public TestFunctional,
+    public TestWithParam<typename Params<SpecificParams...>::params_t>
+{
+    Params<SpecificParams...> m_params;
+
+    void init(TestWithParamBase* instance)
+    {
+        using TestWithParamClass = TestWithParam<typename Params<SpecificParams...>::params_t>;
+        instance->m_params = instance->TestWithParamClass::GetParam();
+        bool _ = false;  // TODO: delete this dummy
+        int distribution = cv::RNG::UNIFORM;
+        std::tie(instance->type, instance->dtype, instance->sz, distribution, _,
+            instance->cmpF, instance->compile_args) = instance->m_params.commonParams();
+        initRand(instance->type, instance->sz, instance->dtype, distribution);
+    }
+public:
+    using common_params_t = typename Params<SpecificParams...>::common_params_t;
+    using specific_params_t = typename Params<SpecificParams...>::specific_params_t;
+    MatType type = -1;
+    MatType dtype = -1;
+    cv::Size sz = {};
+    compare_f cmpF;
+    cv::GCompileArgs compile_args = {};
+
+    TestWithParamBase()
+    {
+        init(this);
+    }
+
+    const Params<SpecificParams...>& GetParam() const
+    {
+        return m_params;
+    }
+};
 
 template<typename T>
 struct Wrappable
