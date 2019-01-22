@@ -4,6 +4,8 @@
 //
 // Copyright (C) 2018 Intel Corporation
 
+#ifndef OPENCV_GAPI_TESTS_COMMON_HPP
+#define OPENCV_GAPI_TESTS_COMMON_HPP
 
 #include <iostream>
 
@@ -341,3 +343,5 @@ namespace
         return os << "compare_scalar_f";
     }
 }
+
+#endif //OPENCV_GAPI_TESTS_COMMON_HPP
