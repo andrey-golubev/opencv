@@ -15,28 +15,116 @@
 namespace opencv_test
 {
 
-struct Filter2DTest : public TestParams <std::tuple<compare_f, MatType,int,cv::Size,int,int,bool,cv::GCompileArgs>> {};
-struct BoxFilterTest : public TestParams <std::tuple<compare_f,MatType,int,cv::Size,int,int,bool,cv::GCompileArgs>> {};
-struct SepFilterTest : public TestParams <std::tuple<compare_f,MatType,int,cv::Size,int,bool,cv::GCompileArgs>> {};
-struct BlurTest : public TestParams <std::tuple<compare_f,MatType,int,cv::Size,int,bool,cv::GCompileArgs>> {};
-struct GaussianBlurTest : public TestParams <std::tuple<compare_f,MatType,int,cv::Size,bool,cv::GCompileArgs>> {};
-struct MedianBlurTest : public TestParams <std::tuple<compare_f,MatType,int,cv::Size,bool,cv::GCompileArgs>> {};
-struct ErodeTest : public TestParams <std::tuple<compare_f,MatType,int,cv::Size,int,bool,cv::GCompileArgs>> {};
-struct Erode3x3Test : public TestParams <std::tuple<compare_f,MatType,cv::Size,bool,int,cv::GCompileArgs>> {};
-struct DilateTest : public TestParams <std::tuple<compare_f,MatType,int,cv::Size,int,bool,cv::GCompileArgs>> {};
-struct Dilate3x3Test : public TestParams <std::tuple<compare_f,MatType,cv::Size,bool,int,cv::GCompileArgs>> {};
-struct SobelTest : public TestParams <std::tuple<compare_f,MatType,int,cv::Size,int,int,int,bool,cv::GCompileArgs>> {};
-struct EqHistTest : public TestParams <std::tuple<compare_f,cv::Size,bool,cv::GCompileArgs>> {};
-struct CannyTest : public TestParams <std::tuple<compare_f,MatType,cv::Size,double,double,int,bool,bool,cv::GCompileArgs>> {};
-struct RGB2GrayTest : public  TestParams<std::tuple<compare_f,cv::Size,bool,cv::GCompileArgs>> {};
-struct BGR2GrayTest : public TestParams<std::tuple<compare_f,cv::Size,bool,cv::GCompileArgs>> {};
-struct RGB2YUVTest : public TestParams<std::tuple<compare_f,cv::Size,bool,cv::GCompileArgs>> {};
-struct YUV2RGBTest : public TestParams<std::tuple<compare_f,cv::Size,bool,cv::GCompileArgs>> {};
-struct RGB2LabTest : public TestParams<std::tuple<compare_f,cv::Size,bool,cv::GCompileArgs>> {};
-struct BGR2LUVTest : public TestParams<std::tuple<compare_f,cv::Size,bool,cv::GCompileArgs>> {};
-struct LUV2BGRTest : public TestParams<std::tuple<compare_f,cv::Size,bool,cv::GCompileArgs>> {};
-struct BGR2YUVTest : public TestParams<std::tuple<compare_f,cv::Size,bool,cv::GCompileArgs>> {};
-struct YUV2BGRTest : public TestParams<std::tuple<compare_f,cv::Size,bool,cv::GCompileArgs>> {};
+struct Filter2DTest : public TestWithParamBase<compare_f,int,int>
+{
+    DEFINE_SPECIFIC_PARAMS_3(cmpF, kernSize, borderType);
+    USE_NORMAL_INIT(Filter2DTest);
+};
+struct BoxFilterTest : public TestWithParamBase<compare_f,int,int>
+{
+    DEFINE_SPECIFIC_PARAMS_3(cmpF, filterSize, borderType);
+    USE_NORMAL_INIT(BoxFilterTest);
+};
+struct SepFilterTest : public TestWithParamBase<compare_f,int>
+{
+    DEFINE_SPECIFIC_PARAMS_2(cmpF, kernSize);
+    USE_NORMAL_INIT(SepFilterTest);
+};
+struct BlurTest : public TestWithParamBase<compare_f,int,int>
+{
+    DEFINE_SPECIFIC_PARAMS_3(cmpF, filterSize, borderType);
+    USE_NORMAL_INIT(BlurTest);
+};
+struct GaussianBlurTest : public TestWithParamBase<compare_f,int>
+{
+    DEFINE_SPECIFIC_PARAMS_2(cmpF, kernSize);
+    USE_NORMAL_INIT(GaussianBlurTest);
+};
+struct MedianBlurTest : public TestWithParamBase<compare_f,int>
+{
+    DEFINE_SPECIFIC_PARAMS_2(cmpF, kernSize);
+    USE_NORMAL_INIT(MedianBlurTest);
+};
+struct ErodeTest : public TestWithParamBase<compare_f,int,int>
+{
+    DEFINE_SPECIFIC_PARAMS_3(cmpF, kernSize, kernType);
+    USE_NORMAL_INIT(ErodeTest);
+};
+struct Erode3x3Test : public TestWithParamBase<compare_f,int>
+{
+    DEFINE_SPECIFIC_PARAMS_2(cmpF, numIters);
+    USE_NORMAL_INIT(Erode3x3Test);
+};
+struct DilateTest : public TestWithParamBase<compare_f,int,int>
+{
+    DEFINE_SPECIFIC_PARAMS_3(cmpF, kernSize, kernType);
+    USE_NORMAL_INIT(DilateTest);
+};
+struct Dilate3x3Test : public TestWithParamBase<compare_f,int>
+{
+    DEFINE_SPECIFIC_PARAMS_2(cmpF, numIters);
+    USE_NORMAL_INIT(Dilate3x3Test);
+};
+struct SobelTest : public TestWithParamBase<compare_f,int,int,int>
+{
+    DEFINE_SPECIFIC_PARAMS_4(cmpF, kernSize, dx, dy);
+    USE_NORMAL_INIT(SobelTest);
+};
+struct EqHistTest : public TestWithParamBase<compare_f>
+{
+    DEFINE_SPECIFIC_PARAMS_1(cmpF);
+    USE_NORMAL_INIT(EqHistTest);
+};
+struct CannyTest : public TestWithParamBase<compare_f,double,double,int,bool>
+{
+    DEFINE_SPECIFIC_PARAMS_5(cmpF, thrLow, thrUp, apSize, l2gr);
+    USE_NORMAL_INIT(CannyTest);
+};
+struct RGB2GrayTest : public TestWithParamBase<compare_f>
+{
+    DEFINE_SPECIFIC_PARAMS_1(cmpF);
+    USE_NORMAL_INIT(RGB2GrayTest);
+};
+struct BGR2GrayTest : public TestWithParamBase<compare_f>
+{
+    DEFINE_SPECIFIC_PARAMS_1(cmpF);
+    USE_NORMAL_INIT(BGR2GrayTest);
+};
+struct RGB2YUVTest : public TestWithParamBase<compare_f>
+{
+    DEFINE_SPECIFIC_PARAMS_1(cmpF);
+    USE_NORMAL_INIT(RGB2YUVTest);
+};
+struct YUV2RGBTest : public TestWithParamBase<compare_f>
+{
+    DEFINE_SPECIFIC_PARAMS_1(cmpF);
+    USE_NORMAL_INIT(YUV2RGBTest);
+};
+struct RGB2LabTest : public TestWithParamBase<compare_f>
+{
+    DEFINE_SPECIFIC_PARAMS_1(cmpF);
+    USE_NORMAL_INIT(RGB2LabTest);
+};
+struct BGR2LUVTest : public TestWithParamBase<compare_f>
+{
+    DEFINE_SPECIFIC_PARAMS_1(cmpF);
+    USE_NORMAL_INIT(BGR2LUVTest);
+};
+struct LUV2BGRTest : public TestWithParamBase<compare_f>
+{
+    DEFINE_SPECIFIC_PARAMS_1(cmpF);
+    USE_NORMAL_INIT(LUV2BGRTest);
+};
+struct BGR2YUVTest : public TestWithParamBase<compare_f>
+{
+    DEFINE_SPECIFIC_PARAMS_1(cmpF);
+    USE_NORMAL_INIT(BGR2YUVTest);
+};
+struct YUV2BGRTest : public TestWithParamBase<compare_f>
+{
+    DEFINE_SPECIFIC_PARAMS_1(cmpF);
+    USE_NORMAL_INIT(YUV2BGRTest);
+};
 } // opencv_test
 
 #endif //OPENCV_GAPI_IMGPROC_TESTS_HPP
