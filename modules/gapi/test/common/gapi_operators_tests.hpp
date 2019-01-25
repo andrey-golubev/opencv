@@ -184,9 +184,20 @@ g_api_ocv_pair_mat_mat opXor = {std::string{"operator^"},
                                         [](const cv::Mat& in1, const cv::Mat& in2, cv::Mat& out){cv::bitwise_xor(in1, in2, out);}};
 
 } // anonymous namespace
-struct MathOperatorMatScalarTest : public TestParams<std::tuple<compare_f, g_api_ocv_pair_mat_scalar,int,cv::Size,int,bool,cv::GCompileArgs>>{};
-struct MathOperatorMatMatTest : public TestParams<std::tuple<compare_f, g_api_ocv_pair_mat_mat,int,cv::Size,int,bool,cv::GCompileArgs>>{};
-struct NotOperatorTest : public TestParams<std::tuple<int,cv::Size,bool,cv::GCompileArgs>> {};
+struct MathOperatorMatScalarTest : public TestWithParamBase<compare_f, g_api_ocv_pair_mat_scalar>
+{
+    DEFINE_SPECIFIC_PARAMS_2(cmpF, op);
+    USE_UNIFORM_INIT(MathOperatorMatScalarTest);
+};
+struct MathOperatorMatMatTest : public TestWithParamBase<compare_f, g_api_ocv_pair_mat_mat>
+{
+    DEFINE_SPECIFIC_PARAMS_2(cmpF, op);
+    USE_UNIFORM_INIT(MathOperatorMatMatTest);
+};
+struct NotOperatorTest : public TestWithParamBase<>
+{
+    USE_UNIFORM_INIT(NotOperatorTest);
+};
 } // opencv_test
 
 #endif // OPENCV_GAPI_OPERATOR_TESTS_COMMON_HPP
