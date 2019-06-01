@@ -155,9 +155,9 @@ private:
 
     void init(const params_t& params)
     {
-        tuple_extensions::copyFromRange<0, std::tuple_size<common_params_t>::value>(
+        detail::copyTupleRange<0, std::tuple_size<common_params_t>::value>(
             params, m_common);
-        tuple_extensions::copyFromRange<std::tuple_size<common_params_t>::value,
+        detail::copyTupleRange<std::tuple_size<common_params_t>::value,
             std::tuple_size<params_t>::value>(params, m_specific);
     }
 public:

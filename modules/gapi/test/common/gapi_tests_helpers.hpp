@@ -20,7 +20,7 @@ enum {
     ALIGNED_TYPE = std::numeric_limits<int>::max()
 };
 
-namespace tuple_extensions
+namespace detail
 {
 template<typename _TupleIn, typename _TupleOut, size_t RFirst, size_t RLast, size_t IndexOut,
     bool stop = false>
@@ -49,7 +49,7 @@ struct CopyUtils<_TupleIn, _TupleOut, RFirst, RLast, IndexOut, true>
 
 // copy range of values from `in` tuple to `out` tuple
 template<size_t RFirst, size_t RLast, size_t Index = 0, typename _TupleIn, typename _TupleOut>
-inline static void copyFromRange(const _TupleIn& in,  _TupleOut& out)
+inline static void copyTupleRange(const _TupleIn& in,  _TupleOut& out)
 {
     static_assert(Index < std::tuple_size<_TupleOut>::value, "out tuple index out of bounds");
     static_assert(RFirst < RLast, "invalid length of range");
@@ -59,7 +59,7 @@ inline static void copyFromRange(const _TupleIn& in,  _TupleOut& out)
         "range is bigger than output tuple");
     CopyUtils<_TupleIn, _TupleOut, RFirst, RLast, Index>::copy(in, out);
 }
-} // namespace tuple_extensions
+} // namespace detail
 
 // in-class definition and initialization of member variables (test parameters)
 #define __DEFINE_PARAMS_IMPL1(params_type, params, index, param_name, ...) \
