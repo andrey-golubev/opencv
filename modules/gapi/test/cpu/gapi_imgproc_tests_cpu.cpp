@@ -15,6 +15,8 @@
 namespace opencv_test
 {
 
+// TODO(agolubev): see if -1 or ALIGNED_TYPE where -1 is used
+
 INSTANTIATE_TEST_CASE_P(Filter2DTestCPU, Filter2DTest,
                         Combine(Values(CV_8UC1, CV_8UC3, CV_16UC1, CV_16SC1, CV_32FC1),
                                 Values(cv::Size(1280, 720),
@@ -159,6 +161,32 @@ INSTANTIATE_TEST_CASE_P(SobelTestCPU32F, SobelTest,
                                 Values(0, 1),
                                 Values(1, 2)));
 
+INSTANTIATE_TEST_CASE_P(SobelXYTestCPU, SobelXYTest,
+                        Combine(Values(CV_8UC1, CV_8UC3, CV_16UC1, CV_16SC1),
+                                Values(cv::Size(1280, 720),
+                                       cv::Size(640, 480)),
+                                Values(ALIGNED_TYPE, CV_16S, CV_32F),
+                                Values(true),
+                                Values(cv::compile_args(IMGPROC_CPU)),
+                                Values(AbsExact().to_compare_f()),
+                                Values(3, 5),
+                                Values(1, 2),
+                                Values(BORDER_CONSTANT, BORDER_REPLICATE, BORDER_REFLECT),
+                                Values(0, 1, 255)));
+
+INSTANTIATE_TEST_CASE_P(SobelXYTestCPU32F, SobelXYTest,
+                        Combine(Values(CV_32FC1),
+                                Values(cv::Size(1280, 720),
+                                       cv::Size(640, 480)),
+                                Values(CV_32F),
+                                Values(true),
+                                Values(cv::compile_args(IMGPROC_CPU)),
+                                Values(AbsExact().to_compare_f()),
+                                Values(3, 5),
+                                Values(1, 2),
+                                Values(BORDER_CONSTANT, BORDER_REPLICATE, BORDER_REFLECT),
+                                Values(0, 1, 255)));
+
 INSTANTIATE_TEST_CASE_P(EqHistTestCPU, EqHistTest,
                         Combine(Values(CV_8UC1),
                                 Values(cv::Size(1280, 720),
@@ -214,6 +242,24 @@ INSTANTIATE_TEST_CASE_P(YUV2RGBTestCPU, YUV2RGBTest,
                                        cv::Size(640, 480)),
                                 Values(CV_8UC3),
 /*init output matrices or not*/ testing::Bool(),
+                                Values(cv::compile_args(IMGPROC_CPU)),
+                                Values(AbsExact().to_compare_f())));
+
+INSTANTIATE_TEST_CASE_P(NV12toRGBTestCPU, NV12toRGBTest,
+                        Combine(Values(CV_8UC1),
+                                Values(cv::Size(1280, 720),
+                                       cv::Size(640, 480)),
+                                Values(CV_8UC3),
+                                Values(true),
+                                Values(cv::compile_args(IMGPROC_CPU)),
+                                Values(AbsExact().to_compare_f())));
+
+INSTANTIATE_TEST_CASE_P(NV12toBGRTestCPU, NV12toBGRTest,
+                        Combine(Values(CV_8UC1),
+                                Values(cv::Size(1280, 720),
+                                       cv::Size(640, 480)),
+                                Values(CV_8UC3),
+                                Values(true),
                                 Values(cv::compile_args(IMGPROC_CPU)),
                                 Values(AbsExact().to_compare_f())));
 

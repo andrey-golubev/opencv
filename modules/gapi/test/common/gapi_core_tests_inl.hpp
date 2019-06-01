@@ -997,7 +997,7 @@ TEST_P(ConcatHorTest, AccuracyTest)
     c.apply(gin(in_mat1, in_mat2), gout(out_mat), std::move(compile_args));
     // OpenCV code /////////////////////////////////////////////////////////////
     {
-        cv::hconcat(in_mat1, in_mat2, out_mat_ocv );
+        cv::hconcat(in_mat1, in_mat2, out_mat_ocv);
     }
     // Comparison //////////////////////////////////////////////////////////////
     {
@@ -1215,6 +1215,27 @@ TEST_P(SqrtTest, AccuracyTest)
     }
 }
 
+TEST_P(NormalizeTest, Test)
+{
+    initMatsRandN(type, sz, CV_MAKETYPE(ddepth, CV_MAT_CN(type)), createOutputMatrices);
+
+    // G-API code //////////////////////////////////////////////////////////////
+    cv::GMat in;
+    auto out = cv::gapi::normalize(in, a, b, norm_type, ddepth);
+
+    cv::GComputation c(cv::GIn(in), cv::GOut(out));
+    c.apply(cv::gin(in_mat1), cv::gout(out_mat_gapi), std::move(compile_args));
+
+    // OpenCV code /////////////////////////////////////////////////////////////
+    {
+        cv::normalize(in_mat1, out_mat_ocv, a, b, norm_type, ddepth);
+    }
+    // Comparison //////////////////////////////////////////////////////////////
+    {
+        EXPECT_TRUE(cmpF(out_mat_gapi, out_mat_ocv));
+        EXPECT_EQ(out_mat_gapi.size(), sz);
+    }
+}
 
 } // opencv_test
 

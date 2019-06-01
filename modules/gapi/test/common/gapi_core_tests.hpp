@@ -293,6 +293,11 @@ struct SqrtTest          : public TestWithParamBase<>
 {
     USE_UNIFORM_INIT(SqrtTest);
 };
+struct NormalizeTest : public TestWithParamBase<compare_f,double,double,int,MatType>
+{
+    DEFINE_SPECIFIC_PARAMS_5(cmpF, a, b, norm_type, ddepth);
+    USE_NORMAL_INIT(NormalizeTest);
+};
 } // opencv_test
 
 #endif //OPENCV_GAPI_CORE_TESTS_HPP
