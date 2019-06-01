@@ -50,8 +50,8 @@ public:
         // TODO(agolubev): perf tests never init output
         if (dtype != -1)
         {
-            out_mat_gapi = cv::Mat (sz_in, dtype);
-            out_mat_ocv = cv::Mat (sz_in, dtype);
+            out_mat_gapi = cv::Mat(sz_in, dtype);
+            out_mat_ocv = cv::Mat(sz_in, dtype);
         }
     }
 
