@@ -1162,17 +1162,17 @@ TEST_P(ConvertToTest, AccuracyTest)
 
     // G-API code //////////////////////////////////////////////////////////////
     cv::GMat in;
-    auto out = cv::gapi::convertTo(in, depth_to);
+    auto out = cv::gapi::convertTo(in, depth_to, alpha, beta);
 
     cv::GComputation c(in, out);
     c.apply(in_mat1, out_mat_gapi, std::move(compile_args));
     // OpenCV code /////////////////////////////////////////////////////////////
     {
-        in_mat1.convertTo(out_mat_ocv, depth_to);
+        in_mat1.convertTo(out_mat_ocv, depth_to, alpha, beta);
     }
     // Comparison //////////////////////////////////////////////////////////////
     {
-        EXPECT_EQ(0, cv::countNonZero(out_mat_ocv != out_mat_gapi));
+        EXPECT_TRUE(cmpF(out_mat_gapi, out_mat_ocv));
         EXPECT_EQ(out_mat_gapi.size(), sz);
     }
 }

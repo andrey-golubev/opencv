@@ -424,7 +424,10 @@ INSTANTIATE_TEST_CASE_P(ConvertToCPU, ConvertToTest,
                                        cv::Size(128, 128)),
                                 Values(CV_8U, CV_16U, CV_16S, CV_32F),
                                 Values(false),
-                                Values(cv::compile_args(CORE_CPU))));
+                                Values(cv::compile_args(CORE_CPU)),
+                                Values(AbsExact().to_compare_f()),
+                                Values(2.5, 1.0, -1.0),
+                                Values(250.0, 0.0, -128.0)));
 
 INSTANTIATE_TEST_CASE_P(ConcatHorTestCPU, ConcatHorTest,
                         Combine(Values( CV_8UC1, CV_8UC3, CV_16UC1, CV_16SC1, CV_32FC1 ),

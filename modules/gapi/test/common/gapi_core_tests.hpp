@@ -280,8 +280,9 @@ struct LUTTest           : public TestWithParamBase<>
 {
     USE_UNIFORM_INIT(LUTTest);
 };
-struct ConvertToTest     : public TestWithParamBase<>
+struct ConvertToTest     : public TestWithParamBase<compare_f, double, double>
 {
+    DEFINE_SPECIFIC_PARAMS_3(cmpF, alpha, beta);
     USE_UNIFORM_INIT(ConvertToTest);
 };
 struct PhaseTest         : public TestWithParamBase<bool>
