@@ -8,9 +8,11 @@
 #define OPENCV_GAPI_TESTS_COMMON_HPP
 
 #include <iostream>
+#include <tuple>
 
 #include "opencv2/ts.hpp"
 #include "opencv2/gapi.hpp"
+#include "opencv2/gapi/util/util.hpp"
 
 #include "gapi_tests_helpers.hpp"
 
@@ -47,7 +49,6 @@ public:
 
     void initOutMats(cv::Size sz_in, int dtype)
     {
-        // TODO(agolubev): perf tests never init output
         if (dtype != -1)
         {
             out_mat_gapi = cv::Mat(sz_in, dtype);
@@ -104,7 +105,7 @@ public:
         {
             case cv::RNG::UNIFORM: return initMatsRandU(type, sz_in, dtype, createOutputMatrices);
             case cv::RNG::NORMAL: return initMatsRandN(type, sz_in, dtype, createOutputMatrices);
-            default: return;  // TODO(agolubev): raise
+            default: GAPI_Assert(false);
         }
     }
 
@@ -153,12 +154,20 @@ private:
     common_params_t m_common;
     specific_params_t m_specific;
 
+    template<typename TIn, typename TOut, int First, int ...Indices>
+    static void copyValues(const TIn& in, TOut& out, cv::detail::Range<First, Indices...>)
+    {
+        out = std::make_tuple(std::get<Indices>(in)...);
+    }
+
     void init(const params_t& params)
     {
-        detail::copyTupleRange<0, std::tuple_size<common_params_t>::value>(
-            params, m_common);
-        detail::copyTupleRange<std::tuple_size<common_params_t>::value,
-            std::tuple_size<params_t>::value>(params, m_specific);
+        constexpr int common_params_size = std::tuple_size<common_params_t>::value;
+        constexpr int specific_params_size = std::tuple_size<specific_params_t>::value;
+        copyValues(params, m_common,
+            typename cv::detail::MkRange<0, common_params_size>::type());
+        copyValues(params, m_specific,
+            typename cv::detail::MkRange<common_params_size, specific_params_size>::type());
     }
 public:
     Params() = default;
@@ -230,6 +239,7 @@ class TestWithParamBase : public TestFunctional,
 public:
     using common_params_t = typename Params<SpecificParams...>::common_params_t;
     using specific_params_t = typename Params<SpecificParams...>::specific_params_t;
+
     MatType type = -1;
     cv::Size sz = {};
     MatType dtype = -1;
