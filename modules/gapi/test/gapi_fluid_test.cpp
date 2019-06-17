@@ -767,4 +767,36 @@ TEST(Fluid, UnusedNodeTest) {
         cv::compile_args(cv::gapi::core::fluid::kernels())));
 }
 
+TEST(Fluid, ZeroHeightMat) {
+    cv::GMat in;
+    cv::GMat a, b, c, d;
+    std::tie(a, b, c, d) = cv::gapi::split4(in);
+    cv::GMat out = cv::gapi::merge3(a, b, c);
+
+    cv::Mat in_mat(cv::Size(8, 0), CV_8UC4);
+    cv::Mat out_mat(cv::Size(8, 8), CV_8UC3);
+
+    cv::GComputation comp(cv::GIn(in), cv::GOut(out));
+
+    // TODO: more specific exception?
+    ASSERT_THROW(comp.apply(cv::gin(in_mat), cv::gout(out_mat),
+        cv::compile_args(cv::gapi::core::fluid::kernels())), std::exception);
+}
+
+TEST(Fluid, ZeroWidthMat) {
+    cv::GMat in;
+    cv::GMat a, b, c, d;
+    std::tie(a, b, c, d) = cv::gapi::split4(in);
+    cv::GMat out = cv::gapi::merge3(a, b, c);
+
+    cv::Mat in_mat(cv::Size(0, 8), CV_8UC4);
+    cv::Mat out_mat(cv::Size(8, 8), CV_8UC3);
+
+    cv::GComputation comp(cv::GIn(in), cv::GOut(out));
+
+    // TODO: more specific exception?
+    ASSERT_THROW(comp.apply(cv::gin(in_mat), cv::gout(out_mat),
+        cv::compile_args(cv::gapi::core::fluid::kernels())), std::exception);
+}
+
 } // namespace opencv_test
