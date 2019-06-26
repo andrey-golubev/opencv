@@ -70,7 +70,8 @@ struct SobelTest : public TestWithParamBase<compare_f,int,int,int>
     DEFINE_SPECIFIC_PARAMS_4(cmpF, kernSize, dx, dy);
     USE_NORMAL_INIT(SobelTest);
 };
-struct SobelXYTest : public TestWithParamBase<compare_f,int,int,int,int> {
+struct SobelXYTest : public TestWithParamBase<compare_f,int,int,int,int>
+{
     DEFINE_SPECIFIC_PARAMS_5(cmpF, kernSize, order, border_type, border_val);
     USE_NORMAL_INIT(SobelXYTest);
 };
@@ -104,11 +105,13 @@ struct YUV2RGBTest : public TestWithParamBase<compare_f>
     DEFINE_SPECIFIC_PARAMS_1(cmpF);
     USE_NORMAL_INIT(YUV2RGBTest);
 };
-struct NV12toRGBTest : public TestWithParamBase<compare_f> {
+struct NV12toRGBTest : public TestWithParamBase<compare_f>
+{
     DEFINE_SPECIFIC_PARAMS_1(cmpF);
     USE_NORMAL_INIT(NV12toRGBTest);
 };
-struct NV12toBGRTest : public TestWithParamBase<compare_f> {
+struct NV12toBGRTest : public TestWithParamBase<compare_f>
+{
     DEFINE_SPECIFIC_PARAMS_1(cmpF);
     USE_NORMAL_INIT(NV12toBGRTest);
 };
@@ -136,6 +139,21 @@ struct YUV2BGRTest : public TestWithParamBase<compare_f>
 {
     DEFINE_SPECIFIC_PARAMS_1(cmpF);
     USE_NORMAL_INIT(YUV2BGRTest);
+};
+struct RGB2HSVTest : public TestWithParamBase<compare_f>
+{
+    DEFINE_SPECIFIC_PARAMS_1(cmpF);
+    USE_NORMAL_INIT(RGB2HSVTest);
+};
+struct BayerGR2RGBTest : public TestWithParamBase<compare_f>
+{
+    DEFINE_SPECIFIC_PARAMS_1(cmpF);
+    USE_NORMAL_INIT(BayerGR2RGBTest);
+};
+struct RGB2YUV422Test : public TestWithParamBase<compare_f>
+{
+    DEFINE_SPECIFIC_PARAMS_1(cmpF);
+    USE_NORMAL_INIT(RGB2YUV422Test);
 };
 } // opencv_test
 

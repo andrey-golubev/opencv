@@ -8,7 +8,7 @@
 #include "../test_precomp.hpp"
 
 #include "../common/gapi_imgproc_tests.hpp"
-#include "opencv2/gapi/cpu/imgproc.hpp"
+#include <opencv2/gapi/cpu/imgproc.hpp>
 
 #define IMGPROC_CPU cv::gapi::imgproc::cpu::kernels()
 
@@ -308,4 +308,30 @@ INSTANTIATE_TEST_CASE_P(YUV2BGRTestCPU, YUV2BGRTest,
                                 Values(cv::compile_args(IMGPROC_CPU)),
                                 Values(AbsExact().to_compare_f())));
 
+INSTANTIATE_TEST_CASE_P(RGB2HSVTestCPU, RGB2HSVTest,
+                        Combine(Values(CV_8UC3),
+                                Values(cv::Size(1280, 720),
+                                       cv::Size(640, 480)),
+                                Values(CV_8UC3),
+/*init output matrices or not*/ testing::Bool(),
+                                Values(cv::compile_args(IMGPROC_CPU)),
+                                Values(AbsExact().to_compare_f())));
+
+INSTANTIATE_TEST_CASE_P(BayerGR2RGBTestCPU, BayerGR2RGBTest,
+                        Combine(Values(CV_8UC1),
+                                Values(cv::Size(1280, 720),
+                                       cv::Size(640, 480)),
+                                Values(CV_8UC3),
+/*init output matrices or not*/ testing::Bool(),
+                                Values(cv::compile_args(IMGPROC_CPU)),
+                                Values(AbsExact().to_compare_f())));
+
+INSTANTIATE_TEST_CASE_P(RGB2YUV422TestCPU, RGB2YUV422Test,
+                        Combine(Values(CV_8UC3),
+                                Values(cv::Size(1280, 720),
+                                       cv::Size(640, 480)),
+                                Values(CV_8UC2),
+/*init output matrices or not*/ testing::Bool(),
+                                Values(cv::compile_args(IMGPROC_CPU)),
+                                Values(AbsTolerance(1).to_compare_f())));
 } // opencv_test
