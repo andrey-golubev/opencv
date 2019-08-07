@@ -1,0 +1,144 @@
+// This file is part of OpenCV project.
+// It is subject to the license terms in the LICENSE file found in the top-level directory
+// of this distribution and at http://opencv.org/license.html.
+//
+// Copyright (C) 2019 Intel Corporation
+
+#include "pattern_matching.hpp"
+
+namespace cv { namespace gimpl {
+
+namespace {
+using Graph = GModel::Graph;
+using Metadata = typename Graph::CMetadataT;
+using VisitedMatchings = std::list<std::pair<ade::NodeHandle, ade::NodeHandle>>;
+
+template<typename NodeGetter>
+SubgraphMatch::S getNodes(const std::vector<ade::NodeHandle>& nodes, NodeGetter get) {
+    SubgraphMatch::S resNodes;
+    for (const auto& node : nodes) {
+        const auto& neighbours = get(node);
+        resNodes.insert(neighbours.cbegin(), neighbours.cend());
+    }
+    return resNodes;
+}
+
+// Returns true if two DATA nodes are semantically and structurally identical:
+//  - both nodes have the same GShape
+//  - both nodes have the same storage
+//  - both nodes have the same meta (FIXME: add)
+//
+// @param first - first node to compare
+// @param firstMeta - metadata of first
+// @param second - second node to compare
+// @param secondMeta - metadata of second
+bool compareDataNodes(const ade::NodeHandle& first,
+                      const Metadata& firstMeta,
+                      const ade::NodeHandle& second,
+                      const Metadata& secondMeta) {
+    if (secondMeta.get<NodeType>().t != NodeType::DATA) {
+        throw std::logic_error("NodeType of passed node as second argument"
+                               "shall be NodeType::DATA!");
+    }
+
+    // FIXME: we must also compare GMetaArg meta attributes (e.g. depth, chan, etc.)
+    const auto& firstData = firstMeta.get<Data>();
+    const auto& secondData = secondMeta.get<Data>();
+    if (firstData.shape != secondData.shape) {
+        return false;
+    }
+    if (firstData.storage != secondData.storage) {
+        return false;
+    }
+
+
+#if 0
+    if (firstPorts.begin() != secondPorts.begin()) {
+        return false;
+    }
+
+    const auto& firstOutputEdges = first->outEdges();
+    const auto& secondOutputEdges = second->outEdges();
+
+    if (firstOutputEdges.size() != secondOutputEdges.size()) {
+        return false;
+    }
+#endif
+
+    return true;
+};
+
+SubgraphMatch::M matchDataNodes(const Graph& pattern, const Graph& substitute,
+    const std::vector<ade::NodeHandle>& patternNodes,
+    const std::vector<ade::NodeHandle>& substituteNodes) {
+    SubgraphMatch::M matched;
+    // FIXME: something smarter?
+    auto size = substituteNodes.size();  // must be the same as patternNodes.size() at this point
+    for (const auto& patternNode : patternNodes) {
+        const auto& patternMeta = pattern.metadata(patternNode);
+        // look at first size elements, found nodes are pushed to the end
+        auto it = std::find_if(substituteNodes.cbegin(), substituteNodes.cbegin() + size,
+            [&] (const ade::NodeHandle& substituteNode) {
+                const auto& substituteMeta = substitute.metadata(substituteNode);
+                return compareDataNodes(patternNode, patternMeta, substituteNode, substituteMeta);
+            });
+        if (it == substituteNodes.cend()) {
+            return {};  // nothing found for some node <=> nothing found at all
+        }
+        matched.insert({ patternNode, *it });
+
+        // search optimization: push found nodes to the end
+        // FIXME: same iterator supported?
+        std::iter_swap(it, substituteNodes.cbegin() + (size - 1));
+        size--;
+    }
+    return matched;
+}
+
+}  // anonymous namespace
+
+SubgraphMatch findPatternToSubstituteMatch(const Graph& pattern, const Graph& substitute) {
+    //---------------------------------------------------------------
+    // Identify operations which start and end our pattern and substitute
+    const auto& patternDataInputs = pattern.metadata().get<Protocol>().in_nhs;
+    const auto& patternDataOutputs = pattern.metadata().get<Protocol>().out_nhs;
+
+    const auto& substituteDataInputs = substitute.metadata().get<Protocol>().in_nhs;
+    const auto& substituteDataOutputs = substitute.metadata().get<Protocol>().out_nhs;
+
+    // if number of data nodes doesn't match, abort
+    if (patternDataInputs.size() != substituteDataInputs.size()
+        || patternDataOutputs.size() != substituteDataOutputs.size()) {
+        return {};
+    }
+
+    // for each pattern input we must find a corresponding substitute input
+    auto matchedDataInputs = matchDataNodes(pattern, substitute, patternDataInputs,
+        substituteDataInputs);
+    if (matchedDataInputs.empty()) {
+        return {};
+    }
+    auto matchedDataOutputs = matchDataNodes(pattern, substitute, patternDataOutputs,
+        substituteDataOutputs);
+    if (matchedDataOutputs.empty()) {
+        return {};
+    }
+
+    SubgraphMatch match;
+    match.inputDataNodes = std::move(matchedDataInputs);
+    match.outputDataNodes = std::move(matchedDataOutputs);
+
+    match.inputTestDataNodes = std::move(substituteDataInputs);
+    match.outputTestDataNodes = std::move(substituteDataOutputs);
+
+    // FIXME: populate these nodes
+    auto& startOps = match.startOpNodes;
+    auto& endOps = match.finishOpNodes;
+
+    auto& internalNodes = match.internalLayers;  // NB: these should also be placed layer by layer!!
+
+    return match;
+}
+
+}  // namespace gimpl
+}  // namespace cv

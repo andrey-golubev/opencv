@@ -93,6 +93,9 @@ namespace gimpl {
     GAPI_EXPORTS SubgraphMatch findMatches(const cv::gimpl::GModel::Graph& patternGraph,
                                            const cv::gimpl::GModel::Graph& compGraph);
 
+    GAPI_EXPORTS SubgraphMatch findPatternToSubstituteMatch(const cv::gimpl::GModel::Graph& pattern,
+        const cv::gimpl::GModel::Graph& substitute);
+
 } //namespace gimpl
 } //namespace cv
 #endif // OPENCV_GAPI_PATTERN_MATCHING_HPP
