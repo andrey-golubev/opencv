@@ -6,6 +6,8 @@
 
 #include "pattern_matching.hpp"
 
+#define UNUSED(x) (void)x
+
 namespace cv { namespace gimpl {
 
 namespace {
@@ -26,7 +28,7 @@ SubgraphMatch::S getNodes(const std::vector<ade::NodeHandle>& nodes, NodeGetter 
 // Returns true if two DATA nodes are semantically and structurally identical:
 //  - both nodes have the same GShape
 //  - both nodes have the same storage
-//  - both nodes have the same meta (FIXME: add)
+//  - both nodes have the same meta
 //
 // @param first - first node to compare
 // @param firstMeta - metadata of first
@@ -36,18 +38,25 @@ bool compareDataNodes(const ade::NodeHandle& first,
                       const Metadata& firstMeta,
                       const ade::NodeHandle& second,
                       const Metadata& secondMeta) {
-    if (secondMeta.get<NodeType>().t != NodeType::DATA) {
-        throw std::logic_error("NodeType of passed node as second argument"
-                               "shall be NodeType::DATA!");
-    }
+    UNUSED(first);
+    UNUSED(second);
 
-    // FIXME: we must also compare GMetaArg meta attributes (e.g. depth, chan, etc.)
+    GAPI_Assert(firstMeta.get<NodeType>().t == NodeType::DATA);
+    GAPI_Assert(firstMeta.get<NodeType>().t == secondMeta.get<NodeType>().t);
+
     const auto& firstData = firstMeta.get<Data>();
     const auto& secondData = secondMeta.get<Data>();
+    // compare shape
     if (firstData.shape != secondData.shape) {
         return false;
     }
+    // compare storage
     if (firstData.storage != secondData.storage) {
+        return false;
+    }
+    // compare meta
+    // FIXME: GArrayDesc && GScalarDesc always return true in operator==
+    if (firstData.meta != secondData.meta) {
         return false;
     }
 
@@ -70,26 +79,26 @@ bool compareDataNodes(const ade::NodeHandle& first,
 
 SubgraphMatch::M matchDataNodes(const Graph& pattern, const Graph& substitute,
     const std::vector<ade::NodeHandle>& patternNodes,
-    const std::vector<ade::NodeHandle>& substituteNodes) {
+    std::vector<ade::NodeHandle> substituteNodes) {
     SubgraphMatch::M matched;
     // FIXME: something smarter?
     auto size = substituteNodes.size();  // must be the same as patternNodes.size() at this point
     for (const auto& patternNode : patternNodes) {
         const auto& patternMeta = pattern.metadata(patternNode);
         // look at first size elements, found nodes are pushed to the end
-        auto it = std::find_if(substituteNodes.cbegin(), substituteNodes.cbegin() + size,
+        auto it = std::find_if(substituteNodes.begin(), substituteNodes.begin() + size,
             [&] (const ade::NodeHandle& substituteNode) {
                 const auto& substituteMeta = substitute.metadata(substituteNode);
                 return compareDataNodes(patternNode, patternMeta, substituteNode, substituteMeta);
             });
-        if (it == substituteNodes.cend()) {
+        if (it == substituteNodes.end()) {
             return {};  // nothing found for some node <=> nothing found at all
         }
         matched.insert({ patternNode, *it });
 
         // search optimization: push found nodes to the end
         // FIXME: same iterator supported?
-        std::iter_swap(it, substituteNodes.cbegin() + (size - 1));
+        std::iter_swap(it, substituteNodes.begin() + (size - 1));
         size--;
     }
     return matched;
@@ -99,7 +108,7 @@ SubgraphMatch::M matchDataNodes(const Graph& pattern, const Graph& substitute,
 
 SubgraphMatch findPatternToSubstituteMatch(const Graph& pattern, const Graph& substitute) {
     //---------------------------------------------------------------
-    // Identify operations which start and end our pattern and substitute
+    // Match data nodes which start and end our pattern and substitute
     const auto& patternDataInputs = pattern.metadata().get<Protocol>().in_nhs;
     const auto& patternDataOutputs = pattern.metadata().get<Protocol>().out_nhs;
 
@@ -115,15 +124,19 @@ SubgraphMatch findPatternToSubstituteMatch(const Graph& pattern, const Graph& su
     // for each pattern input we must find a corresponding substitute input
     auto matchedDataInputs = matchDataNodes(pattern, substitute, patternDataInputs,
         substituteDataInputs);
+    // if nothing found, abort
     if (matchedDataInputs.empty()) {
         return {};
     }
     auto matchedDataOutputs = matchDataNodes(pattern, substitute, patternDataOutputs,
         substituteDataOutputs);
+    // if nothing found, abort
     if (matchedDataOutputs.empty()) {
         return {};
     }
 
+    //---------------------------------------------------------------
+    // Construct SubgraphMatch object
     SubgraphMatch match;
     match.inputDataNodes = std::move(matchedDataInputs);
     match.outputDataNodes = std::move(matchedDataOutputs);
@@ -134,8 +147,11 @@ SubgraphMatch findPatternToSubstituteMatch(const Graph& pattern, const Graph& su
     // FIXME: populate these nodes
     auto& startOps = match.startOpNodes;
     auto& endOps = match.finishOpNodes;
-
     auto& internalNodes = match.internalLayers;  // NB: these should also be placed layer by layer!!
+
+    UNUSED(startOps);
+    UNUSED(endOps);
+    UNUSED(internalNodes);
 
     return match;
 }
