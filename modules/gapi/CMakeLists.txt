@@ -62,6 +62,7 @@ set(gapi_srcs
     src/compiler/passes/exec.cpp
     src/compiler/passes/pattern_matching.cpp
     src/compiler/passes/pattern_to_substitute_matching.cpp
+    src/compiler/passes/perform_substitution.cpp
 
     # Executor
     src/executor/gexecutor.cpp
