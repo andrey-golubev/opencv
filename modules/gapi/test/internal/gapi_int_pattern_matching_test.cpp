@@ -939,4 +939,171 @@ TEST(PatternMatching, adeSmokeTest)
     EXPECT_EQ(2u, dst->inNodes().size());
 }
 
+TEST(PatternMatchingForSubstitute, TestSimple1)
+{
+    // Pattern
+    ade::Graph pg;
+    {
+        GMat in;
+        GMat out = cv::gapi::bitwise_not(in);
+        matching_test::initGModel(pg, cv::GIn(in), cv::GOut(out));
+    }
+
+    // Substitute
+    ade::Graph sg;
+    GMat in;
+    GMat out = cv::gapi::bitwise_not(in);
+    matching_test::initGModel(sg, cv::GIn(in), cv::GOut(out));
+
+    // Pattern Matching
+    cv::gimpl::GModel::Graph pgm(pg);
+    cv::gimpl::GModel::Graph sgm(sg);
+    const auto ok = [] (const cv::gimpl::SubgraphMatch& match) {
+        // FIXME: match.ok()?
+        return !match.inputDataNodes.empty() && !match.outputDataNodes.empty()
+            && !match.inputTestDataNodes.empty() && !match.outputTestDataNodes.empty();
+    };
+    cv::gimpl::SubgraphMatch match = cv::gimpl::findPatternToSubstituteMatch(pg, sg);
+
+    // Inspecting results:
+    EXPECT_TRUE(ok(match));
+
+    auto nodes = match.nodes();
+    EXPECT_EQ(2u, nodes.size());  // operations not remembered, so only input/output nodes are here
+
+    const auto in_nh = cv::gimpl::GModel::dataNodeOf(sgm, in);
+    const auto out_nh = cv::gimpl::GModel::dataNodeOf(sgm, out);
+    const auto op_nh = cv::gimpl::GModel::producerOf(sgm, out_nh);
+
+    // FIXME: enable disabled expects?
+    // EXPECT_EQ(matching_test::S({in_nh, out_nh, op_nh}), nodes);
+    EXPECT_EQ(matching_test::S({in_nh, out_nh}), nodes);
+    EXPECT_EQ(cv::gapi::core::GNot::id(), matching_test::opName(sgm, op_nh));
+    EXPECT_TRUE(matching_test::isConsumedBy(sgm, in_nh, op_nh));
+    // EXPECT_EQ(matching_test::S{op_nh}, match.startOps());
+    // EXPECT_EQ(matching_test::S{op_nh}, match.finishOps());
+    EXPECT_EQ(matching_test::V{in_nh}, match.protoIns());
+    EXPECT_EQ(matching_test::V{out_nh}, match.protoOuts());
+}
+
+TEST(PatternMatchingForSubstitute, DISABLED_TestSimple2)
+{
+    // Pattern
+    ade::Graph pg;
+    {
+        GMat in;
+        GMat out = cv::gapi::bitwise_not(in);
+        matching_test::initGModel(pg, cv::GIn(in), cv::GOut(out));
+    }
+
+    // Test
+    ade::Graph sg;
+    GMat in;
+    GMat tmp = cv::gapi::bitwise_not(in);
+    GMat out = cv::gapi::blur(tmp, cv::Size(3, 3));
+    matching_test::initGModel(sg, cv::GIn(in), cv::GOut(out));
+
+    // Pattern Matching
+    cv::gimpl::GModel::Graph pgm(pg);
+    cv::gimpl::GModel::Graph sgm(sg);
+    cv::gimpl::SubgraphMatch match = cv::gimpl::findPatternToSubstituteMatch(pg, sg);
+
+    // Inspecting results:
+    EXPECT_TRUE(match.ok());
+
+    auto nodes = match.nodes();
+    EXPECT_EQ(3u, nodes.size());
+
+    const auto in_nh = cv::gimpl::GModel::dataNodeOf(sgm, in);
+    const auto tmp_nh = cv::gimpl::GModel::dataNodeOf(sgm, tmp);
+    const auto op_nh = cv::gimpl::GModel::producerOf(sgm, tmp_nh);
+
+    // EXPECT_EQ(matching_test::S({in_nh, tmp_nh, op_nh}), nodes);
+    EXPECT_EQ(matching_test::S({in_nh, tmp_nh}), nodes);
+    EXPECT_EQ(cv::gapi::core::GNot::id(), matching_test::opName(sgm, op_nh));
+    EXPECT_TRUE(matching_test::isConsumedBy(sgm, in_nh, op_nh));
+    EXPECT_EQ(matching_test::S{op_nh}, match.startOps());
+    EXPECT_EQ(matching_test::S{op_nh}, match.finishOps());
+    EXPECT_EQ(matching_test::V{in_nh}, match.protoIns());
+    EXPECT_EQ(matching_test::V{tmp_nh}, match.protoOuts());
+}
+
+
+TEST(PatternMatchingFull, Test1)
+{
+    cv::Size in_sz(640, 480);
+    cv::Mat input(in_sz, CV_8UC3);
+    cv::randu(input, cv::Scalar::all(0), cv::Scalar::all(100));
+    cv::Mat output_baseline, output_transformed;
+
+
+    cv::Size out_sz(100, 100);
+    double fx = 0.0, fy = 0.0;
+    int interpolation = cv::INTER_LINEAR;
+
+    const auto compile_args = [] () {
+        return cv::compile_args(cv::gapi::GKernelPackage{});
+    };
+
+    const auto ade_get_graph = [&] (const cv::GComputation& c) {
+        cv::gimpl::GCompiler compiler1(c, cv::descr_of(cv::gin(input)), compile_args());
+        auto ade_graph_ptr = compiler1.generateGraph();
+        compiler1.runPasses(*ade_graph_ptr);
+        // compiler1.compileIslands(*ade_graph_ptr);  // FIXME: not required for pattern match?
+        return ade_graph_ptr;
+    };
+
+    // Main
+    std::unique_ptr<cv::GComputation> cmg;
+    {
+        GMat in;
+        GMat to_be_replaced = cv::gapi::resize(in, out_sz, fx, fy, interpolation);
+        GMat out = cv::gapi::mul(to_be_replaced, cv::gapi::bitwise_not(to_be_replaced));
+        cmg.reset(new cv::GComputation(cv::GIn(in), cv::GOut(out)));
+
+        cv::GComputation(cv::GIn(in), cv::GOut(out)).apply(input, output_baseline);
+    }
+    auto ade_mg = ade_get_graph(*cmg);
+
+    // Pattern
+    std::unique_ptr<cv::GComputation> cpg;
+    {
+        GMat in;
+        GMat out = cv::gapi::resize(in, out_sz, fx, fy, interpolation);
+        cpg.reset(new cv::GComputation(cv::GIn(in), cv::GOut(out)));
+    }
+    auto ade_pg = ade_get_graph(*cpg);
+
+    // Substitute
+    std::unique_ptr<cv::GComputation> csg;
+    {
+        GMat in;
+        GMat b, g, r;
+        std::tie(b, g, r) = cv::gapi::split3(in);
+        auto resize = std::bind(&cv::gapi::resize, std::placeholders::_1, out_sz, fx, fy,
+            interpolation);
+        GMat out = cv::gapi::merge3(resize(b), resize(g), resize(r));
+        csg.reset(new cv::GComputation(cv::GIn(in), cv::GOut(out)));
+    }
+    auto ade_sg = ade_get_graph(*csg);
+
+    // Pattern Matching
+    cv::gimpl::GModel::Graph pgm(*ade_pg);  // pattern
+    cv::gimpl::GModel::Graph sgm(*ade_sg);  // substitute
+    cv::gimpl::GModel::Graph mgm(*ade_mg);  // main
+
+    cv::gimpl::SubgraphMatch match1 = cv::gimpl::findMatches(pgm, mgm);
+    cv::gimpl::SubgraphMatch match2 = cv::gimpl::findPatternToSubstituteMatch(pgm, sgm);
+    // Substitute
+    cv::gimpl::performSubstitution(mgm, match1, match2);
+
+    // Run substituted version
+    std::cout << "Compiling new graph..." << std::endl;
+
+    // FIXME: how to run output_transformed???
+    // compiled(input, output_transformed);
+
+    EXPECT_TRUE(AbsExact()(output_baseline, output_transformed));
+}
+
 } // namespace opencv_test
