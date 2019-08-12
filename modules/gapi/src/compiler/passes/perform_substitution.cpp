@@ -14,8 +14,9 @@ namespace {
 using Graph = GModel::Graph;
 }  // anonymous namespace
 
-void performSubstitution(Graph& graph, const SubgraphMatch& patternToGraph,
+void performSubstitution(Graph& graph, Graph& substitute, const SubgraphMatch& patternToGraph,
     const SubgraphMatch& patternToSubstitute) {
+    UNUSED(substitute);
     // substitute input nodes
     for (const auto& inputNodePair : patternToGraph.inputDataNodes) {
         const auto& patternDataNode = inputNodePair.first;
@@ -26,6 +27,7 @@ void performSubstitution(Graph& graph, const SubgraphMatch& patternToGraph,
         GAPI_Assert(it != graph.nodes().end());
         *it = substituteDataNode;
     }
+
 
     // FIXME: internal layers must be matched automatically? (due to inputs/output are loosely
     //        coupled to internal nodes?)
