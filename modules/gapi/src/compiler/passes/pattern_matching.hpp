@@ -97,7 +97,7 @@ namespace gimpl {
         const cv::gimpl::GModel::Graph& substitute);
 
     GAPI_EXPORTS void performSubstitution(cv::gimpl::GModel::Graph& graph,
-        cv::gimpl::GModel::Graph& substitute, const SubgraphMatch& patternToGraph,
+        const cv::gimpl::GModel::Graph& substitute, const SubgraphMatch& patternToGraph,
         const SubgraphMatch& patternToSubstitute);
 
 } //namespace gimpl

@@ -15,16 +15,6 @@ using Graph = GModel::Graph;
 using Metadata = typename Graph::CMetadataT;
 using VisitedMatchings = std::list<std::pair<ade::NodeHandle, ade::NodeHandle>>;
 
-template<typename NodeGetter>
-SubgraphMatch::S getNodes(const std::vector<ade::NodeHandle>& nodes, NodeGetter get) {
-    SubgraphMatch::S resNodes;
-    for (const auto& node : nodes) {
-        const auto& neighbours = get(node);
-        resNodes.insert(neighbours.cbegin(), neighbours.cend());
-    }
-    return resNodes;
-}
-
 // Returns true if two DATA nodes are semantically and structurally identical:
 //  - both nodes have the same GShape
 //  - both nodes have the same storage
