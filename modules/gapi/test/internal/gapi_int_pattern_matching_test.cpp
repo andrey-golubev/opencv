@@ -1029,13 +1029,12 @@ TEST(PatternMatchingForSubstitute, DISABLED_TestSimple2)
 }
 
 
-TEST(PatternMatchingFull, DISABLED_Test1)
+TEST(PatternMatchingFull, Test1)
 {
     cv::Size in_sz(640, 480);
     cv::Mat input(in_sz, CV_8UC3);
     cv::randu(input, cv::Scalar::all(0), cv::Scalar::all(100));
     cv::Mat output_baseline, output_transformed;
-
 
     cv::Size out_sz(100, 100);
     double fx = 0.0, fy = 0.0;
@@ -1048,7 +1047,7 @@ TEST(PatternMatchingFull, DISABLED_Test1)
     const auto ade_get_graph = [&] (const cv::GComputation& c) {
         cv::gimpl::GCompiler compiler1(c, cv::descr_of(cv::gin(input)), compile_args());
         auto ade_graph_ptr = compiler1.generateGraph();
-        compiler1.runPasses(*ade_graph_ptr);
+        compiler1.runPasses(*ade_graph_ptr);  // FIXME: in theory, there should be a lightweight compiler that executes only relevant passes
         // compiler1.compileIslands(*ade_graph_ptr);  // FIXME: not required for pattern match?
         return ade_graph_ptr;
     };
@@ -1088,9 +1087,9 @@ TEST(PatternMatchingFull, DISABLED_Test1)
     auto ade_sg = ade_get_graph(*csg);
 
     // Pattern Matching
+    cv::gimpl::GModel::Graph mgm(*ade_mg);  // main
     cv::gimpl::GModel::Graph pgm(*ade_pg);  // pattern
     cv::gimpl::GModel::Graph sgm(*ade_sg);  // substitute
-    cv::gimpl::GModel::Graph mgm(*ade_mg);  // main
 
     cv::gimpl::SubgraphMatch match1 = cv::gimpl::findMatches(pgm, mgm);
     cv::gimpl::SubgraphMatch match2 = cv::gimpl::findPatternToSubstituteMatch(pgm, sgm);
@@ -1101,7 +1100,13 @@ TEST(PatternMatchingFull, DISABLED_Test1)
     std::cout << "Compiling new graph..." << std::endl;
 
     // FIXME: how to run new graph???: GCompiler::generateGraph() that takes graph in??
-    // compiled(input, output_transformed);
+    cv::gimpl::GCompiler compiler(*cmg, cv::descr_of(cv::gin(input)), compile_args());
+    EXPECT_TRUE(compiler.transform(mgm, pgm, sgm));
+    compiler.runPasses(*ade_mg);
+    compiler.compileIslands(*ade_mg);
+    auto compiled = compiler.produceCompiled(std::move(ade_mg));
+
+    compiled(input, output_transformed);
 
     EXPECT_TRUE(AbsExact()(output_baseline, output_transformed));
 }

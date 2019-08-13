@@ -30,6 +30,8 @@
 #include "compiler/gcompiled_priv.hpp"
 #include "compiler/passes/passes.hpp"
 
+#include "compiler/passes/pattern_matching.hpp"
+
 #include "executor/gexecutor.hpp"
 #include "backends/common/gbackend.hpp"
 
@@ -272,6 +274,25 @@ cv::gimpl::GCompiler::GPtr cv::gimpl::GCompiler::generateGraph()
     gm.metadata().set(p);
 
     return pG;
+}
+
+bool cv::gimpl::GCompiler::transform(GModel::Graph& main, const GModel::Graph& pattern,
+    const GModel::Graph& substitute) {
+    validateInputMeta();
+    validateOutProtoArgs();
+
+    // FIXME: there can be more than one match?
+    auto match1 = findMatches(pattern, main);
+    if (!match1.ok()) {
+        return false;
+    }
+    // FIXME: there can be more than one match?
+    auto match2 = findPatternToSubstituteMatch(pattern, substitute);
+    if (!match2.partialOk()) {
+        return false;
+    }
+    performSubstitution(main, substitute, match1, match2);
+    return true;
 }
 
 void cv::gimpl::GCompiler::runPasses(ade::Graph &g)

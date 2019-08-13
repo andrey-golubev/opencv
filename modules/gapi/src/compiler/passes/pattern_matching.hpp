@@ -41,7 +41,11 @@ namespace gimpl {
             return    !inputDataNodes.empty() && !startOpNodes.empty()
                    && !finishOpNodes.empty() && !outputDataNodes.empty()
                    && !inputTestDataNodes.empty() && !outputTestDataNodes.empty();
+        }
 
+        bool partialOk() const {
+            return !inputDataNodes.empty() && !outputDataNodes.empty()
+                && !inputTestDataNodes.empty() && !outputTestDataNodes.empty();
         }
 
        S nodes() const {

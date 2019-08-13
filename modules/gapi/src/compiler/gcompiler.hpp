@@ -16,6 +16,8 @@
 
 #include <ade/execution_engine/execution_engine.hpp>
 
+#include "gmodel.hpp"
+
 namespace cv { namespace gimpl {
 
 // FIXME: exported for internal tests only!
@@ -46,6 +48,10 @@ public:
     void       runPasses(ade::Graph &g);      // Apply all G-API passes on a GModel
     void       compileIslands(ade::Graph &g); // Instantiate GIslandExecutables in GIslandModel
     GCompiled  produceCompiled(GPtr &&pg);    // Produce GCompiled from processed GModel
+
+    // FIXME: can't use optional -> ade::Graph/GModel::Graph not copy-able
+    bool transform(GModel::Graph& main, const GModel::Graph& pattern,
+        const GModel::Graph& substitute);
 };
 
 }}
