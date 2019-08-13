@@ -125,16 +125,12 @@ void performSubstitution(Graph& graph, const Graph& substitute, const SubgraphMa
             const auto& createdWriter = createdCorrespodingNodes.at(writer);
             // create edge
             auto createdEdge = graph.link(createdWriter, createdCurr);
-            // set ports
-            graph.metadata(createdEdge).set(
-                Input{ substitute.metadata(edge).get<Input>().port });
-            graph.metadata(createdEdge).set(
-                Output{ substitute.metadata(edge).get<Output>().port });
 
             // FIXME: now do something really weird  -- setup descriptors in Op nodes
             switch (substitute.metadata(curr).get<NodeType>().t) {
             case NodeType::OP: {
-                const auto port = graph.metadata(createdEdge).get<Input>().port;
+                const auto port = substitute.metadata(edge).get<Input>().port;
+                graph.metadata(createdEdge).set(Input{ port });
                 auto& createdCurrOp = graph.metadata(createdCurr).get<cv::gimpl::Op>();
                 auto& createdWriterData = graph.metadata(createdWriter).get<cv::gimpl::Data>();
 
@@ -145,7 +141,8 @@ void performSubstitution(Graph& graph, const Graph& substitute, const SubgraphMa
                 break;
             }
             case NodeType::DATA: {
-                const auto port = graph.metadata(createdEdge).get<Output>().port;
+                const auto port = substitute.metadata(edge).get<Output>().port;
+                graph.metadata(createdEdge).set(Output{ port });
                 auto& createdWriterOp = graph.metadata(createdWriter).get<cv::gimpl::Op>();
                 auto& createdCurrData = graph.metadata(createdCurr).get<cv::gimpl::Data>();
 
@@ -177,8 +174,12 @@ void performSubstitution(Graph& graph, const Graph& substitute, const SubgraphMa
         const auto& graphDataNode = inputNodePair.second;
         const auto& substituteDataNode = patternToSubstitute.inputDataNodes.at(patternDataNode);
 
-        GModel::redirectWriter(
-            graph, graphDataNode, createdCorrespodingNodes.at(substituteDataNode));
+        do {
+            // FIXME: is it alright to just skip?
+            if (graphDataNode->inEdges().size() <= 0) break;  // do not redirect if no writers
+            GModel::redirectWriter(
+                graph, graphDataNode, createdCorrespodingNodes.at(substituteDataNode));
+        } while (false);
         graph.erase(graphDataNode);
     }
 
@@ -188,9 +189,18 @@ void performSubstitution(Graph& graph, const Graph& substitute, const SubgraphMa
         const auto& graphDataNode = outputNodePair.second;
         const auto& substituteDataNode = patternToSubstitute.outputDataNodes.at(patternDataNode);
 
-        GModel::redirectReaders(
-            graph, graphDataNode, createdCorrespodingNodes.at(substituteDataNode));
+        do {
+            if (graphDataNode->outEdges().size() <= 0) break;  // do not redirect if no readers
+            GModel::redirectReaders(
+                graph, graphDataNode, createdCorrespodingNodes.at(substituteDataNode));
+        } while (false);
         graph.erase(graphDataNode);
+    }
+
+    // 3) erase internal nodes
+    const auto& graphInternalNodes = patternToGraph.internalLayers;
+    for (auto node : graphInternalNodes) {
+        graph.erase(node);
     }
 }
 

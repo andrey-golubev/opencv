@@ -33,7 +33,8 @@ namespace gapi {
 
 namespace gimpl { namespace passes {
 
-void dumpDot(const ade::Graph &g, std::ostream& os);
+// FIXME: remove exports
+GAPI_EXPORTS void dumpDot(const ade::Graph &g, std::ostream& os);
 void dumpDot(ade::passes::PassContext &ctx, std::ostream& os);
 void dumpDotStdout(ade::passes::PassContext &ctx);
 void dumpGraph(ade::passes::PassContext     &ctx, const std::string& dump_path);

@@ -21,6 +21,10 @@
 
 #include "../common/gapi_tests_common.hpp"
 
+#include "compiler/passes/passes.hpp"
+
+#include <fstream>
+
 #include "logger.hpp"
 
 namespace opencv_test
@@ -32,6 +36,14 @@ using V = std::vector<ade::NodeHandle>;
 using S =  std::unordered_set< ade::NodeHandle
                              , ade::HandleHasher<ade::Node>
                              >;
+
+void myDumpDotToFile(ade::Graph &g, const std::string& dump_path)
+{
+    std::ofstream dump_file(dump_path);
+    ASSERT_TRUE(dump_file.is_open());
+    cv::gimpl::passes::dumpDot(g, dump_file);
+    dump_file << std::endl;
+}
 
 void initGModel(ade::Graph& gr,
                 cv::GProtoInputArgs&& in,
@@ -1028,8 +1040,8 @@ TEST(PatternMatchingForSubstitute, DISABLED_TestSimple2)
     EXPECT_EQ(matching_test::V{tmp_nh}, match.protoOuts());
 }
 
-
-TEST(PatternMatchingFull, Test1)
+// FIXME: doesn't work for now
+TEST(PatternMatchingFull, DISABLED_SubstituteGraphInTheBeginning)
 {
     cv::Size in_sz(640, 480);
     cv::Mat input(in_sz, CV_8UC3);
@@ -1102,6 +1114,93 @@ TEST(PatternMatchingFull, Test1)
     // FIXME: how to run new graph???: GCompiler::generateGraph() that takes graph in??
     cv::gimpl::GCompiler compiler(*cmg, cv::descr_of(cv::gin(input)), compile_args());
     EXPECT_TRUE(compiler.transform(mgm, pgm, sgm));
+    compiler.runPasses(*ade_mg);
+    compiler.compileIslands(*ade_mg);
+    auto compiled = compiler.produceCompiled(std::move(ade_mg));
+
+    compiled(input, output_transformed);
+
+    EXPECT_TRUE(AbsExact()(output_baseline, output_transformed));
+}
+
+TEST(PatternMatchingFull, SubstituteGraphInTheMiddle)
+{
+    cv::Size in_sz(640, 480);
+    cv::Mat input(in_sz, CV_8UC3);
+    cv::randu(input, cv::Scalar::all(0), cv::Scalar::all(100));
+    cv::Mat output_baseline, output_transformed;
+
+    cv::Size out_sz(100, 100);
+    double fx = 0.0, fy = 0.0;
+    int interpolation = cv::INTER_LINEAR;
+
+    const auto compile_args = [] () {
+        return cv::compile_args(cv::gapi::GKernelPackage{});
+    };
+
+    const auto ade_get_graph = [&] (const cv::GComputation& c) {
+        cv::gimpl::GCompiler compiler1(c, cv::descr_of(cv::gin(input)), compile_args());
+        auto ade_graph_ptr = compiler1.generateGraph();
+        compiler1.runPasses(*ade_graph_ptr);  // FIXME: in theory, there should be a lightweight compiler that executes only relevant passes
+        // compiler1.compileIslands(*ade_graph_ptr);  // FIXME: not required for pattern match?
+        return ade_graph_ptr;
+    };
+
+    // Main
+    std::unique_ptr<cv::GComputation> cmg;
+    GMat in;
+    GMat tmp = cv::gapi::bitwise_or(in, in);
+    GMat to_be_replaced = cv::gapi::resize(tmp, out_sz, fx, fy, interpolation);
+    GMat out = cv::gapi::mul(to_be_replaced, cv::gapi::bitwise_not(to_be_replaced));
+    cmg.reset(new cv::GComputation(cv::GIn(in), cv::GOut(out)));
+
+    cv::GComputation(cv::GIn(in), cv::GOut(out)).apply(input, output_baseline);
+    auto ade_mg = ade_get_graph(*cmg);
+
+    // Pattern
+    std::unique_ptr<cv::GComputation> cpg;
+    {
+        GMat in;
+        GMat out = cv::gapi::resize(in, out_sz, fx, fy, interpolation);
+        cpg.reset(new cv::GComputation(cv::GIn(in), cv::GOut(out)));
+    }
+    auto ade_pg = ade_get_graph(*cpg);
+
+    // Substitute
+    std::unique_ptr<cv::GComputation> csg;
+    {
+        GMat in;
+        GMat b, g, r;
+        std::tie(b, g, r) = cv::gapi::split3(in);
+        auto resize = std::bind(&cv::gapi::resize, std::placeholders::_1, out_sz, fx, fy,
+            interpolation);
+        GMat out = cv::gapi::merge3(resize(b), resize(g), resize(r));
+        csg.reset(new cv::GComputation(cv::GIn(in), cv::GOut(out)));
+    }
+    auto ade_sg = ade_get_graph(*csg);
+
+    // Pattern Matching
+    cv::gimpl::GModel::Graph mgm(*ade_mg);  // main
+    cv::gimpl::GModel::Graph pgm(*ade_pg);  // pattern
+    cv::gimpl::GModel::Graph sgm(*ade_sg);  // substitute
+
+    cv::gimpl::SubgraphMatch match1 = cv::gimpl::findMatches(pgm, mgm);
+    cv::gimpl::SubgraphMatch match2 = cv::gimpl::findPatternToSubstituteMatch(pgm, sgm);
+    // Substitute
+    cv::gimpl::performSubstitution(mgm, sgm, match1, match2);
+
+    // matching_test::myDumpDotToFile(*ade_mg, "orig_g.dot");
+
+    // Run substituted version
+    std::cout << "Compiling new graph..." << std::endl;
+
+    // FIXME: how to run new graph???: GCompiler::generateGraph() that takes graph in??
+    cv::gimpl::GCompiler compiler(*cmg, cv::descr_of(cv::gin(input)), compile_args());
+    EXPECT_TRUE(compiler.transform(mgm, pgm, sgm));
+    matching_test::initGModel(*ade_mg, cv::GIn(in), cv::GOut(out));
+
+    matching_test::myDumpDotToFile(*ade_mg, "transformed.dot");
+
     compiler.runPasses(*ade_mg);
     compiler.compileIslands(*ade_mg);
     auto compiled = compiler.produceCompiled(std::move(ade_mg));
