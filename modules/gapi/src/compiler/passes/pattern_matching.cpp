@@ -535,7 +535,6 @@ cv::gimpl::findMatches(const cv::gimpl::GModel::Graph& patternGraph,
 
                 auto patternOutputPort =
                         patternGraph.metadata(patternOutEdge).get<cv::gimpl::Output>().port;
-
                 auto matchedIt = std::find_if(testOutputEdges.begin(), testOutputEdges.end(),
                     [&](const ade::EdgeHandle& testOutEdge) -> bool {
                     auto testOutputPort =
@@ -560,7 +559,7 @@ cv::gimpl::findMatches(const cv::gimpl::GModel::Graph& patternGraph,
         // Create vector with the correctly ordered OUT data nodes in the test subgraph
         std::vector<ade::NodeHandle> outputTestDataNodes;
         for (const auto& patternOutNode : patternOutputDataNodes) {
-            outputTestDataNodes.push_back(outputApiMatch[patternOutNode]);
+            outputTestDataNodes.push_back(outputApiMatch.at(patternOutNode));
         }
 
         SubgraphMatch subgraph;

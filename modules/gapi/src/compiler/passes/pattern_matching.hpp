@@ -100,8 +100,11 @@ namespace gimpl {
     GAPI_EXPORTS SubgraphMatch findPatternToSubstituteMatch(const cv::gimpl::GModel::Graph& pattern,
         const cv::gimpl::GModel::Graph& substitute);
 
+    // FIXME: delete pattern from here
     GAPI_EXPORTS void performSubstitution(cv::gimpl::GModel::Graph& graph,
-        const cv::gimpl::GModel::Graph& substitute, const SubgraphMatch& patternToGraph,
+        const cv::gimpl::GModel::Graph& substitute,
+        const cv::gimpl::GModel::Graph& pattern,
+        const SubgraphMatch& patternToGraph,
         const SubgraphMatch& patternToSubstitute);
 
 } //namespace gimpl

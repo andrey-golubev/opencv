@@ -1103,11 +1103,6 @@ TEST(PatternMatchingFull, DISABLED_SubstituteGraphInTheBeginning)
     cv::gimpl::GModel::Graph pgm(*ade_pg);  // pattern
     cv::gimpl::GModel::Graph sgm(*ade_sg);  // substitute
 
-    cv::gimpl::SubgraphMatch match1 = cv::gimpl::findMatches(pgm, mgm);
-    cv::gimpl::SubgraphMatch match2 = cv::gimpl::findPatternToSubstituteMatch(pgm, sgm);
-    // Substitute
-    cv::gimpl::performSubstitution(mgm, sgm, match1, match2);
-
     // Run substituted version
     std::cout << "Compiling new graph..." << std::endl;
 
@@ -1153,9 +1148,9 @@ TEST(PatternMatchingFull, SubstituteGraphInTheMiddle)
     GMat to_be_replaced = cv::gapi::resize(tmp, out_sz, fx, fy, interpolation);
     GMat out = cv::gapi::mul(to_be_replaced, cv::gapi::bitwise_not(to_be_replaced));
     cmg.reset(new cv::GComputation(cv::GIn(in), cv::GOut(out)));
-
-    cv::GComputation(cv::GIn(in), cv::GOut(out)).apply(input, output_baseline);
     auto ade_mg = ade_get_graph(*cmg);
+
+    matching_test::myDumpDotToFile(*ade_mg, "main.dot");
 
     // Pattern
     std::unique_ptr<cv::GComputation> cpg;
@@ -1165,6 +1160,8 @@ TEST(PatternMatchingFull, SubstituteGraphInTheMiddle)
         cpg.reset(new cv::GComputation(cv::GIn(in), cv::GOut(out)));
     }
     auto ade_pg = ade_get_graph(*cpg);
+
+    matching_test::myDumpDotToFile(*ade_pg, "pattern.dot");
 
     // Substitute
     std::unique_ptr<cv::GComputation> csg;
@@ -1184,12 +1181,15 @@ TEST(PatternMatchingFull, SubstituteGraphInTheMiddle)
     cv::gimpl::GModel::Graph pgm(*ade_pg);  // pattern
     cv::gimpl::GModel::Graph sgm(*ade_sg);  // substitute
 
-    cv::gimpl::SubgraphMatch match1 = cv::gimpl::findMatches(pgm, mgm);
-    cv::gimpl::SubgraphMatch match2 = cv::gimpl::findPatternToSubstituteMatch(pgm, sgm);
-    // Substitute
-    cv::gimpl::performSubstitution(mgm, sgm, match1, match2);
+    const auto print_size = [] (std::string name, const cv::gimpl::GModel::Graph& g) {
+        std::cout << name << " graph nodes().size() = " << g.nodes().size() << std::endl;
+    };
 
-    // matching_test::myDumpDotToFile(*ade_mg, "orig_g.dot");
+    std::cout << "---------------------" << std::endl;
+    print_size("main", mgm);
+    print_size("pattern", pgm);
+    print_size("substitute", sgm);
+    std::cout << "---------------------" << std::endl;
 
     // Run substituted version
     std::cout << "Compiling new graph..." << std::endl;
@@ -1197,7 +1197,29 @@ TEST(PatternMatchingFull, SubstituteGraphInTheMiddle)
     // FIXME: how to run new graph???: GCompiler::generateGraph() that takes graph in??
     cv::gimpl::GCompiler compiler(*cmg, cv::descr_of(cv::gin(input)), compile_args());
     EXPECT_TRUE(compiler.transform(mgm, pgm, sgm));
-    matching_test::initGModel(*ade_mg, cv::GIn(in), cv::GOut(out));
+    std::cout << "---------------------" << std::endl;
+    print_size("(after compiler.transform) main", mgm);
+    std::cout << "---------------------" << std::endl;
+    // matching_test::initGModel(*ade_mg, cv::GIn(in), cv::GOut(out));
+
+    //-------------------Only for review purpose---------------------
+    //---------------------Not production code-----------------------
+    //Temporary tricks before the code relocation to the required place.
+
+#if 0
+    //--------Bad and UB trick to call protected method:-------------
+    class AdeGraphTrick : public cv::gimpl::GModel::ConstGraph {
+    public:
+        using cv::gimpl::GModel::ConstGraph::getCGraph;
+    };
+
+    auto constCompGraph = static_cast<cv::gimpl::GModel::ConstGraph>(compGraph);
+    auto& constCompGraphRef = constCompGraph;
+
+    auto& constCompAdeGraph = static_cast<AdeGraphTrick &>(constCompGraphRef).getCGraph();
+    auto& compAdeGraph = const_cast<ade::Graph&>(constCompAdeGraph);
+    //------------------End of the Bad and UB trick.-----------------
+#endif
 
     matching_test::myDumpDotToFile(*ade_mg, "transformed.dot");
 
@@ -1206,6 +1228,8 @@ TEST(PatternMatchingFull, SubstituteGraphInTheMiddle)
     auto compiled = compiler.produceCompiled(std::move(ade_mg));
 
     compiled(input, output_transformed);
+
+    cv::GComputation(cv::GIn(in), cv::GOut(out)).apply(input, output_baseline);
 
     EXPECT_TRUE(AbsExact()(output_baseline, output_transformed));
 }

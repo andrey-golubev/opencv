@@ -7,6 +7,7 @@
 #include "pattern_matching.hpp"
 
 #include <list>
+#include <algorithm>
 
 #define UNUSED(x) (void)x
 
@@ -15,51 +16,108 @@ namespace cv { namespace gimpl {
 namespace {
 using Graph = GModel::Graph;
 
+// FIXME: use GModel::mk*Node instead
+// Creates new node based on original metadata in dst graph
 ade::NodeHandle create(const Graph& src, Graph& dst, const ade::NodeHandle& original) {
     switch (src.metadata(original).get<NodeType>().t) {
     case NodeType::OP: {
+        auto op = src.metadata(original).get<cv::gimpl::Op>();
+        return GModel::mkOpNode(dst, op.k, op.args, "");
+
+#if 0
         ade::NodeHandle newNode = dst.createNode();
         dst.metadata(newNode).set(cv::gimpl::NodeType{ cv::gimpl::NodeType::OP });
 
-        auto op = src.metadata(original).get<cv::gimpl::Op>();
-        auto island = src.metadata(original).get<cv::gimpl::Island>();
+        // std::string island = src.metadata(original).get<cv::gimpl::Island>().name();
 
-#if 0  // FIXME: why not just set same op as in src graph???
+        // FIXME: why not just set same op as in src graph???
         dst.metadata(newNode).set(cv::gimpl::Op{ op.k, op.args,{},{} });
-#endif
-
-#if 0
-        for (auto& out : op.outs) {
-            // FIXME: what's a proper way to update obj counter? do we need to do it at all?
-            out.id = dst.metadata().get<cv::gimpl::DataObjectCounter>().GetCurrId(out.shape);
-        }
-#endif
-        dst.metadata(newNode).set(cv::gimpl::Op{ op });
-        dst.metadata(newNode).set(island);
+        // if (!island.empty()) {
+            // dst.metadata(newNode).set(cv::gimpl::Island{ std::move(an iniisland) });
+        // }
 
         return newNode;
+#endif
     }
     case NodeType::DATA: {
+        const auto& data = src.metadata(original).get<cv::gimpl::Data>();
+        return GModel::mkDataNode(dst, data.shape);
+
+#if 0
         ade::NodeHandle newNode = dst.createNode();
         dst.metadata(newNode).set(cv::gimpl::NodeType{ cv::gimpl::NodeType::DATA });
 
-        const auto& data = src.metadata(original).get<cv::gimpl::Data>();
         const auto shape = data.shape;
         const auto id = dst.metadata().get<cv::gimpl::DataObjectCounter>().GetNewId(shape);
         // FIXME: why new data is not just a copy of old data? due to id?
-        dst.metadata(newNode).set(
-            cv::gimpl::Data{ shape, id, data.meta, data.ctor, data.storage });
+        dst.metadata(newNode).set(Data{ shape, id, {}, {}, data.storage });
 
         return newNode;
+#endif
     }
     default: GAPI_Assert(false && "unrecognized NodeType");
     }
 }
 
+// Finds key of src_node in src_map (searching by value)
+ade::NodeHandle findKey(const ade::NodeHandle& src_node, const SubgraphMatch::M& src_map) {
+    using NH = ade::NodeHandle;
+    auto it = std::find_if(src_map.cbegin(), src_map.cend(), [&] (const std::pair<NH, NH>& p) {
+        return p.second == src_node;
+    });
+    GAPI_Assert(it != src_map.cend());
+    return it->first;
+}
+
+// Finds src_node in src_map (searching by value) then returns dst_map[found]
+ade::NodeHandle find(const ade::NodeHandle& src_node, const SubgraphMatch::M& src_map,
+    const SubgraphMatch::M& dst_map) {
+    using NH = ade::NodeHandle;
+    auto key = findKey(src_node, src_map);
+    return dst_map.at(key);
+}
+
+template<typename It>
+void erase_many_nodes(Graph& g, It first, It last) {
+    for (; first != last; ++first) {
+        g.erase(*first);
+    }
+}
+
+template<typename It>
+void erase_many_pairs(Graph& g, It first, It last) {
+    for (; first != last; ++first) {
+        g.erase(first->second);
+    }
+}
+
+void customLinkIn(Graph &g, ade::NodeHandle opH, ade::NodeHandle objH, std::size_t in_port)
+{
+    // Check if input is already connected
+#if 0
+    for (const auto& in_e : opH->inEdges())
+    {
+        GAPI_Assert(g.metadata(in_e).get<Input>().port != in_port);
+    }
+#endif
+
+    auto &op = g.metadata(opH).get<Op>();
+    auto &gm = g.metadata(objH).get<Data>();
+
+     // FIXME: check validity using kernel prototype
+    GAPI_Assert(in_port < op.args.size());
+
+    ade::EdgeHandle eh = g.link(objH, opH);
+    g.metadata(eh).set(Input{in_port});
+
+    // Replace an API object with a REF (G* -> GOBJREF)
+    op.args[in_port] = cv::GArg(RcDesc{gm.rc, gm.shape, {}});
+}
+
 }  // anonymous namespace
 
-void performSubstitution(Graph& graph, const Graph& substitute, const SubgraphMatch& patternToGraph,
-    const SubgraphMatch& patternToSubstitute) {
+void performSubstitution(Graph& graph, const Graph& substitute, const cv::gimpl::GModel::Graph& pattern,
+    const SubgraphMatch& patternToGraph, const SubgraphMatch& patternToSubstitute) {
 #if 0
     UNUSED(substitute);
     // substitute input nodes
@@ -89,33 +147,71 @@ void performSubstitution(Graph& graph, const Graph& substitute, const SubgraphMa
     }
 #endif
 
+    // FIXME: start from "input" OP nodes, not DATA -> this should look prettier??
     // Idea: 1) construct substitute graph in main graph; 2) redirect readers/writers from graph
     // nodes to corresponding newly constructed pseudo-substitute nodes
 
     // 1) traverse the graph from the nodes after the inputs (second level)
     std::list<ade::NodeHandle> nodes;
     const auto& substituteInputs = substitute.metadata().get<Protocol>().in_nhs;
+    const auto& substituteOutputs = substitute.metadata().get<Protocol>().out_nhs;
 
     // remember substitute node for each main graph node
     SubgraphMatch::M createdCorrespodingNodes;
 
-    // a. create input nodes
+    // a. _do not_ create input DATA nodes, just find corresponding graph node
     for (const auto& curr : substituteInputs) {
+#if 0
         // create input node and remember it
         createdCorrespodingNodes.insert({curr, create(substitute, graph, curr)});
-
+#else
+        createdCorrespodingNodes.insert(
+            {curr, find(curr, patternToSubstitute.inputDataNodes, patternToGraph.inputDataNodes)});
+#endif
         // populate nodes with readers of current input node
         auto currReaders = curr->outNodes();
         std::copy(currReaders.begin(), currReaders.end(), std::back_inserter(nodes));
     }
+
+    // we only care about data nodes here: they must be visited once
+    SubgraphMatch::S visitedDataNodes;
 
     // b. traverse the graph starting from the second level of nodes
     while (!nodes.empty()) {
         auto curr = nodes.front();
         nodes.pop_front();
 
+        // FIXME: this should be done via ade::util::filter() - but didn't work
+        if (visitedDataNodes.cend() != visitedDataNodes.find(curr)) {
+            continue;
+        }
+
         // create new node and remember it
-        auto createdCurr = create(substitute, graph, curr);
+#if 0
+        ade::NodeHandle createdCurr = create(substitute, graph, curr);
+#else
+        bool existing = false;
+        ade::NodeHandle createdCurr;
+        if (createdCorrespodingNodes.count(curr) > 0) {
+            createdCurr = createdCorrespodingNodes.at(curr);
+        } else {
+            // if curr node is an output DATA node, do not create it, just find corresponding graph node
+            if (substituteOutputs.cend() !=
+                std::find(substituteOutputs.cbegin(), substituteOutputs.cend(), curr)) {
+                createdCurr =
+                    find(curr, patternToSubstitute.outputDataNodes, patternToGraph.outputDataNodes);
+                existing = true;
+
+                auto dataCreated = graph.metadata(createdCurr).get<Data>();
+
+                auto patternCurr = findKey(curr, patternToSubstitute.outputDataNodes);
+                auto data = pattern.metadata(patternCurr).get<Data>();
+                int a = 5;
+            } else {
+                createdCurr = create(substitute, graph, curr);
+            }
+        }
+#endif
         createdCorrespodingNodes.insert({curr, createdCurr});
 
         // link new node with the node from the previous level
@@ -123,37 +219,26 @@ void performSubstitution(Graph& graph, const Graph& substitute, const SubgraphMa
         for (const auto& edge : currInEdges) {
             auto writer = edge->srcNode();
             const auto& createdWriter = createdCorrespodingNodes.at(writer);
-            // create edge
-            auto createdEdge = graph.link(createdWriter, createdCurr);
 
-            // FIXME: now do something really weird  -- setup descriptors in Op nodes
+            // create edges
             switch (substitute.metadata(curr).get<NodeType>().t) {
             case NodeType::OP: {
                 const auto port = substitute.metadata(edge).get<Input>().port;
-                graph.metadata(createdEdge).set(Input{ port });
-                auto& createdCurrOp = graph.metadata(createdCurr).get<cv::gimpl::Op>();
-                auto& createdWriterData = graph.metadata(createdWriter).get<cv::gimpl::Data>();
-
-                // FIXME: something similar is done in create() -- revise usage
-                createdCurrOp.args[port] = cv::GArg(
-                    cv::gimpl::RcDesc{ createdWriterData.rc, createdWriterData.shape,
-                        createdWriterData.ctor });
+                // GModel::linkIn(graph, createdCurr, createdWriter, port);
+                customLinkIn(graph, createdCurr, createdWriter, port);
                 break;
             }
             case NodeType::DATA: {
                 const auto port = substitute.metadata(edge).get<Output>().port;
-                graph.metadata(createdEdge).set(Output{ port });
-                auto& createdWriterOp = graph.metadata(createdWriter).get<cv::gimpl::Op>();
-                auto& createdCurrData = graph.metadata(createdCurr).get<cv::gimpl::Data>();
+                const auto& data = substitute.metadata(curr).get<Data>();
 
-                // FIXME: why this part is needed at all, let's just set outs from original node...
-                const auto storageWithPort = ade::util::checked_cast<std::size_t>(port + 1);
-                const auto minOutSize = std::max(createdWriterOp.outs.size(), storageWithPort);
-                createdWriterOp.outs.resize(minOutSize, cv::gimpl::RcDesc{-1, GShape::GMAT, {}});
-                // FIXME: something similar is done in create() -- revise usage
-                createdWriterOp.outs[port] =
-                    cv::gimpl::RcDesc{createdCurrData.rc, createdCurrData.shape,
-                        createdCurrData.ctor};
+                if (existing) {
+                    for (auto e : createdCurr->inEdges()) {
+                        graph.erase(e);
+                    }
+                }
+                GModel::linkOut(graph, createdWriter, createdCurr, port);
+                visitedDataNodes.insert(curr);
                 break;
             }
             default: GAPI_Assert(false && "unrecognized NodeType");
@@ -167,6 +252,7 @@ void performSubstitution(Graph& graph, const Graph& substitute, const SubgraphMa
 
     // FIXME: how old internal nodes are going to be deleted??
 
+#if 0
     // 2) now redirect readers && do clean-up
     // redirect input nodes
     for (const auto& inputNodePair : patternToGraph.inputDataNodes) {
@@ -176,11 +262,11 @@ void performSubstitution(Graph& graph, const Graph& substitute, const SubgraphMa
 
         do {
             // FIXME: is it alright to just skip?
-            if (graphDataNode->inEdges().size() <= 0) break;  // do not redirect if no writers
+            // if (graphDataNode->inEdges().size() <= 0) break;  // do not redirect if no writers
             GModel::redirectWriter(
                 graph, graphDataNode, createdCorrespodingNodes.at(substituteDataNode));
         } while (false);
-        graph.erase(graphDataNode);
+        // graph.erase(graphDataNode);
     }
 
     // redirect output nodes
@@ -190,17 +276,27 @@ void performSubstitution(Graph& graph, const Graph& substitute, const SubgraphMa
         const auto& substituteDataNode = patternToSubstitute.outputDataNodes.at(patternDataNode);
 
         do {
-            if (graphDataNode->outEdges().size() <= 0) break;  // do not redirect if no readers
+            // if (graphDataNode->outEdges().size() <= 0) break;  // do not redirect if no readers
             GModel::redirectReaders(
                 graph, graphDataNode, createdCorrespodingNodes.at(substituteDataNode));
         } while (false);
-        graph.erase(graphDataNode);
+        // graph.erase(graphDataNode);
     }
+#endif
+
+    auto size = createdCorrespodingNodes.size();
+    std::cout << "Created nodes size = " << size << std::endl;
 
     // 3) erase internal nodes
-    const auto& graphInternalNodes = patternToGraph.internalLayers;
-    for (auto node : graphInternalNodes) {
-        graph.erase(node);
+    erase_many_pairs(graph, patternToGraph.startOpNodes.begin(), patternToGraph.startOpNodes.end());
+    erase_many_nodes(graph, patternToGraph.internalLayers.begin(),
+        patternToGraph.internalLayers.begin());
+    erase_many_pairs(graph, patternToGraph.finishOpNodes.begin(),
+        patternToGraph.finishOpNodes.begin());
+
+    // FIXME: workaround??
+    for (auto node : graph.nodes()) {
+        graph.metadata(node).erase<Island>();
     }
 }
 

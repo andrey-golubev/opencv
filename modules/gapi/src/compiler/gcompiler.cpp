@@ -291,7 +291,7 @@ bool cv::gimpl::GCompiler::transform(GModel::Graph& main, const GModel::Graph& p
     if (!match2.partialOk()) {
         return false;
     }
-    performSubstitution(main, substitute, match1, match2);
+    performSubstitution(main, substitute, pattern, match1, match2);
     return true;
 }
 

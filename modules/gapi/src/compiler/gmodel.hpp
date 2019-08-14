@@ -127,7 +127,6 @@ class DataObjectCounter
 public:
     static const char* name() { return "DataObjectCounter"; }
     int GetNewId(GShape shape) { return m_next_data_id[shape]++; }
-    int GetCurrId(GShape shape) { return m_next_data_id[shape]; }  // FIXME: shouldn't be needed
 private:
     std::unordered_map<cv::GShape, int> m_next_data_id;
 };
