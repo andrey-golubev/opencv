@@ -295,6 +295,50 @@ bool cv::gimpl::GCompiler::transform(GModel::Graph& main, const GModel::Graph& p
     return true;
 }
 
+bool cv::gimpl::GCompiler::transform(ade::Graph& main, GModel::Graph& maing,
+    const GModel::Graph& pattern, const GModel::Graph& substitute,
+    const cv::GProtoArgs& substitute_ins, const cv::GProtoArgs& substitute_outs,
+    const cv::GMetaArgs& substitute_metas) {
+    validateInputMeta();
+    validateOutProtoArgs();
+
+    // FIXME: there can be more than one match?
+    auto match1 = findMatches(pattern, main);
+    if (!match1.ok()) {
+        return false;
+    }
+
+    // now build substitute graph into main graph
+    // FIXME: first check that pattern can be matched to substitute (somehow without building)??
+
+    // FIXME: there's no non-dynamic input at this level, right?
+    cv::gimpl::GModelBuilder builder(main);
+    // Build the subgraph graph which will need to replace the compound node
+    const auto& proto_slots = builder.put(substitute_ins, substitute_outs);
+
+    const auto& in_nhs  = std::get<2>(proto_slots);
+    const auto& out_nhs = std::get<3>(proto_slots);
+
+    // FIXME: custom meta setting!
+    for (const auto& it : ade::util::indexed(in_nhs))
+    {
+        auto& data = maing.metadata(ade::util::value(it)).get<Data>();
+        data.meta = substitute_metas.at(ade::util::index(it));
+    }
+
+    this->runPasses(main);
+
+    // FIXME: there can be more than one match?
+    auto match2 = findPatternToSubstituteMatch(pattern, main, in_nhs, out_nhs);
+    if (!match2.partialOk()) {
+        return false;
+    }
+
+    // redirect inputs
+    performSubstitutionAlt(maing, substitute, pattern, match1, match2);
+    return true;
+}
+
 void cv::gimpl::GCompiler::runPasses(ade::Graph &g)
 {
     m_e.runPasses(g);

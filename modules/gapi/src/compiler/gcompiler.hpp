@@ -52,6 +52,13 @@ public:
     // FIXME: can't use optional -> ade::Graph/GModel::Graph not copy-able
     bool transform(GModel::Graph& main, const GModel::Graph& pattern,
         const GModel::Graph& substitute);
+
+    // FIXME: main && maing - the same thing
+    bool transform(ade::Graph& main, GModel::Graph& maing,
+        const GModel::Graph& pattern,
+        const GModel::Graph& substitute,
+        const cv::GProtoArgs& substitute_ins, const cv::GProtoArgs& substitute_outs,
+        const cv::GMetaArgs& substitute_metas);
 };
 
 }}

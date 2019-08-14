@@ -1147,6 +1147,7 @@ TEST(PatternMatchingFull, SubstituteGraphInTheMiddle)
     GMat tmp = cv::gapi::bitwise_or(in, in);
     GMat to_be_replaced = cv::gapi::resize(tmp, out_sz, fx, fy, interpolation);
     GMat out = cv::gapi::mul(to_be_replaced, cv::gapi::bitwise_not(to_be_replaced));
+    cv::GComputation(cv::GIn(in), cv::GOut(out)).apply(input, output_baseline);
     cmg.reset(new cv::GComputation(cv::GIn(in), cv::GOut(out)));
     auto ade_mg = ade_get_graph(*cmg);
 
@@ -1196,7 +1197,12 @@ TEST(PatternMatchingFull, SubstituteGraphInTheMiddle)
 
     // FIXME: how to run new graph???: GCompiler::generateGraph() that takes graph in??
     cv::gimpl::GCompiler compiler(*cmg, cv::descr_of(cv::gin(input)), compile_args());
+#if 1  // alternative version
+    EXPECT_TRUE(compiler.transform(*ade_mg, mgm, pgm, sgm, csg->priv().m_ins, csg->priv().m_outs,
+        cv::descr_of(cv::gin(input))));
+#else
     EXPECT_TRUE(compiler.transform(mgm, pgm, sgm));
+#endif
     std::cout << "---------------------" << std::endl;
     print_size("(after compiler.transform) main", mgm);
     std::cout << "---------------------" << std::endl;
@@ -1221,7 +1227,6 @@ TEST(PatternMatchingFull, SubstituteGraphInTheMiddle)
     //------------------End of the Bad and UB trick.-----------------
 #endif
 
-    matching_test::myDumpDotToFile(*ade_mg, "transformed.dot");
 
     compiler.runPasses(*ade_mg);
     compiler.compileIslands(*ade_mg);
@@ -1229,7 +1234,9 @@ TEST(PatternMatchingFull, SubstituteGraphInTheMiddle)
 
     compiled(input, output_transformed);
 
-    cv::GComputation(cv::GIn(in), cv::GOut(out)).apply(input, output_baseline);
+#if 0  // FIXME: broken in alternative version
+    matching_test::myDumpDotToFile(*ade_mg, "transformed.dot");
+#endif
 
     EXPECT_TRUE(AbsExact()(output_baseline, output_transformed));
 }

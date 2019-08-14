@@ -146,5 +146,58 @@ SubgraphMatch findPatternToSubstituteMatch(const Graph& pattern, const Graph& su
     return match;
 }
 
+SubgraphMatch findPatternToSubstituteMatch(const cv::gimpl::GModel::Graph& pattern,
+    const cv::gimpl::GModel::Graph& substitute,
+    const std::vector<ade::NodeHandle>& substitute_ins,
+    const std::vector<ade::NodeHandle>& substitute_outs) {
+    //---------------------------------------------------------------
+    // Match data nodes which start and end our pattern and substitute
+    const auto& patternDataInputs = pattern.metadata().get<Protocol>().in_nhs;
+    const auto& patternDataOutputs = pattern.metadata().get<Protocol>().out_nhs;
+
+    const auto& substituteDataInputs = substitute_ins;
+    const auto& substituteDataOutputs = substitute_outs;
+
+    // if number of data nodes doesn't match, abort
+    if (patternDataInputs.size() != substituteDataInputs.size()
+        || patternDataOutputs.size() != substituteDataOutputs.size()) {
+        return {};
+    }
+
+    // for each pattern input we must find a corresponding substitute input
+    auto matchedDataInputs = matchDataNodes(pattern, substitute, patternDataInputs,
+        substituteDataInputs);
+    // if nothing found, abort
+    if (matchedDataInputs.empty()) {
+        return {};
+    }
+    auto matchedDataOutputs = matchDataNodes(pattern, substitute, patternDataOutputs,
+        substituteDataOutputs);
+    // if nothing found, abort
+    if (matchedDataOutputs.empty()) {
+        return {};
+    }
+
+    //---------------------------------------------------------------
+    // Construct SubgraphMatch object
+    SubgraphMatch match;
+    match.inputDataNodes = std::move(matchedDataInputs);
+    match.outputDataNodes = std::move(matchedDataOutputs);
+
+    match.inputTestDataNodes = std::move(substituteDataInputs);
+    match.outputTestDataNodes = std::move(substituteDataOutputs);
+
+    // FIXME: populate these nodes
+    auto& startOps = match.startOpNodes;
+    auto& endOps = match.finishOpNodes;
+    auto& internalNodes = match.internalLayers;  // NB: these should also be placed layer by layer!!
+
+    UNUSED(startOps);
+    UNUSED(endOps);
+    UNUSED(internalNodes);
+
+    return match;
+}
+
 }  // namespace gimpl
 }  // namespace cv

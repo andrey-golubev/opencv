@@ -118,35 +118,6 @@ void customLinkIn(Graph &g, ade::NodeHandle opH, ade::NodeHandle objH, std::size
 
 void performSubstitution(Graph& graph, const Graph& substitute, const cv::gimpl::GModel::Graph& pattern,
     const SubgraphMatch& patternToGraph, const SubgraphMatch& patternToSubstitute) {
-#if 0
-    UNUSED(substitute);
-    // substitute input nodes
-    for (const auto& inputNodePair : patternToGraph.inputDataNodes) {
-        const auto& patternDataNode = inputNodePair.first;
-        const auto& graphDataNode = inputNodePair.second;
-        const auto& substituteDataNode = patternToSubstitute.inputDataNodes.at(patternDataNode);
-
-        auto it = std::find(graph.nodes().begin(), graph.nodes().end(), graphDataNode);
-        GAPI_Assert(it != graph.nodes().end());
-        *it = substituteDataNode;
-    }
-
-
-    // FIXME: internal layers must be matched automatically? (due to inputs/output are loosely
-    //        coupled to internal nodes?)
-
-    // substitute output nodes
-    for (const auto& outputNodePair : patternToGraph.outputDataNodes) {
-        const auto& patternDataNode = outputNodePair.first;
-        const auto& graphDataNode = outputNodePair.second;
-        const auto& substituteDataNode = patternToSubstitute.outputDataNodes.at(patternDataNode);
-
-        auto it = std::find(graph.nodes().begin(), graph.nodes().end(), graphDataNode);
-        GAPI_Assert(it != graph.nodes().end());
-        *it = substituteDataNode;
-    }
-#endif
-
     // FIXME: start from "input" OP nodes, not DATA -> this should look prettier??
     // Idea: 1) construct substitute graph in main graph; 2) redirect readers/writers from graph
     // nodes to corresponding newly constructed pseudo-substitute nodes
@@ -293,6 +264,46 @@ void performSubstitution(Graph& graph, const Graph& substitute, const cv::gimpl:
         patternToGraph.internalLayers.begin());
     erase_many_pairs(graph, patternToGraph.finishOpNodes.begin(),
         patternToGraph.finishOpNodes.begin());
+
+    // FIXME: workaround??
+    for (auto node : graph.nodes()) {
+        graph.metadata(node).erase<Island>();
+    }
+}
+
+void performSubstitutionAlt(Graph& graph, const Graph& substitute,
+    const cv::gimpl::GModel::Graph& pattern,
+    const SubgraphMatch& patternToGraph, const SubgraphMatch& patternToSubstitute) {
+    UNUSED(substitute);
+    // substitute input nodes
+    for (const auto& inputNodePair : patternToGraph.inputDataNodes) {
+        const auto& patternDataNode = inputNodePair.first;
+        const auto& graphDataNode = inputNodePair.second;
+        const auto& substituteDataNode = patternToSubstitute.inputDataNodes.at(patternDataNode);
+        GModel::redirectReaders(graph, substituteDataNode, graphDataNode);
+    }
+
+    // substitute output nodes
+    for (const auto& outputNodePair : patternToGraph.outputDataNodes) {
+        const auto& patternDataNode = outputNodePair.first;
+        const auto& graphDataNode = outputNodePair.second;
+        const auto& substituteDataNode = patternToSubstitute.outputDataNodes.at(patternDataNode);
+        for (auto e : graphDataNode->inEdges()) {
+            graph.erase(e);
+        }
+        GModel::redirectWriter(graph, substituteDataNode, graphDataNode);
+    }
+
+    // 3) erase internal nodes
+    // erase_many_pairs(graph, patternToGraph.inputDataNodes.begin(), patternToGraph.inputDataNodes.end());
+    erase_many_pairs(graph, patternToSubstitute.inputDataNodes.begin(), patternToSubstitute.inputDataNodes.end());
+    erase_many_pairs(graph, patternToGraph.startOpNodes.begin(), patternToGraph.startOpNodes.end());
+    erase_many_nodes(graph, patternToGraph.internalLayers.begin(),
+        patternToGraph.internalLayers.begin());
+    erase_many_pairs(graph, patternToGraph.finishOpNodes.begin(),
+        patternToGraph.finishOpNodes.begin());
+    // erase_many_pairs(graph, patternToGraph.outputDataNodes.begin(), patternToGraph.outputDataNodes.begin());
+    erase_many_pairs(graph, patternToSubstitute.outputDataNodes.begin(), patternToSubstitute.outputDataNodes.begin());
 
     // FIXME: workaround??
     for (auto node : graph.nodes()) {
