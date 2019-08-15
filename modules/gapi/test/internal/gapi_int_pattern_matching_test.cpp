@@ -1177,6 +1177,8 @@ TEST(PatternMatchingFull, SubstituteGraphInTheMiddle)
     }
     auto ade_sg = ade_get_graph(*csg);
 
+    matching_test::myDumpDotToFile(*ade_sg, "substitute.dot");
+
     // Pattern Matching
     cv::gimpl::GModel::Graph mgm(*ade_mg);  // main
     cv::gimpl::GModel::Graph pgm(*ade_pg);  // pattern

@@ -295,15 +295,13 @@ void performSubstitutionAlt(Graph& graph, const Graph& substitute,
     }
 
     // 3) erase internal nodes
-    // erase_many_pairs(graph, patternToGraph.inputDataNodes.begin(), patternToGraph.inputDataNodes.end());
     erase_many_pairs(graph, patternToSubstitute.inputDataNodes.begin(), patternToSubstitute.inputDataNodes.end());
     erase_many_pairs(graph, patternToGraph.startOpNodes.begin(), patternToGraph.startOpNodes.end());
     erase_many_nodes(graph, patternToGraph.internalLayers.begin(),
         patternToGraph.internalLayers.begin());
     erase_many_pairs(graph, patternToGraph.finishOpNodes.begin(),
         patternToGraph.finishOpNodes.begin());
-    // erase_many_pairs(graph, patternToGraph.outputDataNodes.begin(), patternToGraph.outputDataNodes.begin());
-    erase_many_pairs(graph, patternToSubstitute.outputDataNodes.begin(), patternToSubstitute.outputDataNodes.begin());
+    erase_many_pairs(graph, patternToSubstitute.outputDataNodes.begin(), patternToSubstitute.outputDataNodes.end());
 
     // FIXME: workaround??
     for (auto node : graph.nodes()) {

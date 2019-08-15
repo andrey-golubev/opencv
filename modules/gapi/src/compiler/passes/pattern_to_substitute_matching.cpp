@@ -184,8 +184,8 @@ SubgraphMatch findPatternToSubstituteMatch(const cv::gimpl::GModel::Graph& patte
     match.inputDataNodes = std::move(matchedDataInputs);
     match.outputDataNodes = std::move(matchedDataOutputs);
 
-    match.inputTestDataNodes = std::move(substituteDataInputs);
-    match.outputTestDataNodes = std::move(substituteDataOutputs);
+    match.inputTestDataNodes = substituteDataInputs;
+    match.outputTestDataNodes = substituteDataOutputs;
 
     // FIXME: populate these nodes
     auto& startOps = match.startOpNodes;
