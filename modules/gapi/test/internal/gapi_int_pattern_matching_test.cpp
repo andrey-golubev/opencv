@@ -1185,4 +1185,70 @@ TEST(PatternMatchingFull, SubstituteGraphInTheMiddle)
     ASSERT_TRUE(AbsExact()(output_baseline, output_transformed));
 }
 
+using CompCreator = std::function<cv::GComputation()>;
+struct PatternMatchingHighLevel :
+    TestWithParam<std::tuple<CompCreator, CompCreator, CompCreator>> {};
+
+TEST_P(PatternMatchingHighLevel, UnifiedTest) {
+    cv::Size in_sz(640, 480);
+    cv::Mat input(in_sz, CV_8UC3);
+    cv::randu(input, cv::Scalar::all(0), cv::Scalar::all(100));
+    cv::Mat orig_output, transformed_output;
+
+    const auto compile_args = [] () {
+        return cv::compile_args(cv::gapi::GKernelPackage{});
+    };
+
+    {
+        // Run original graph
+        auto mainC = std::get<0>(GetParam())();
+        mainC.apply(input, orig_output, compile_args());
+    }
+
+    auto mainC = std::get<0>(GetParam())();  // get new copy with new Priv
+    auto patternC = std::get<1>(GetParam())();
+    auto substituteC = std::get<2>(GetParam())();
+
+    // Generate original graph
+    cv::gimpl::GCompiler compiler(mainC, cv::descr_of(cv::gin(input)), compile_args());
+    auto graph = compiler.generateGraph();
+
+    // Apply substitution
+    ASSERT_TRUE(compiler.transform(*graph, patternC, substituteC));
+
+    // Run transformed graph
+    compiler.runPasses(*graph);
+    compiler.compileIslands(*graph);
+    auto compiled = compiler.produceCompiled(std::move(graph));
+    compiled(input, transformed_output);
+
+    // Compare
+    ASSERT_TRUE(AbsExact()(orig_output, transformed_output));
+}
+
+// FIXME: add more tests to this part
+INSTANTIATE_TEST_CASE_P(SubstituteGraphInTheBeginning, PatternMatchingHighLevel,
+    Combine(Values([] () {
+                GMat in;
+                GMat to_be_replaced = cv::gapi::resize(in, cv::Size(100, 100),
+                    0, 0, cv::INTER_LINEAR);
+                GMat out = cv::gapi::mul(to_be_replaced, cv::gapi::bitwise_not(to_be_replaced));
+                return cv::GComputation(cv::GIn(in), cv::GOut(out));
+            }),
+            Values([] () {
+                GMat in;
+                GMat out = cv::gapi::resize(in, cv::Size(100, 100),
+                    0, 0, cv::INTER_LINEAR);
+                return cv::GComputation(cv::GIn(in), cv::GOut(out));
+            }),
+            Values([] () {
+                GMat in;
+                GMat b, g, r;
+                std::tie(b, g, r) = cv::gapi::split3(in);
+                auto resize = std::bind(&cv::gapi::resize, std::placeholders::_1, cv::Size(100, 100),
+                    0, 0, cv::INTER_LINEAR);
+                GMat out = cv::gapi::merge3(resize(b), resize(g), resize(r));
+                return cv::GComputation(cv::GIn(in), cv::GOut(out));
+            })));
+
 } // namespace opencv_test
