@@ -130,19 +130,6 @@ SubgraphMatch findPatternToSubstituteMatch(const Graph& pattern, const Graph& su
     SubgraphMatch match;
     match.inputDataNodes = std::move(matchedDataInputs);
     match.outputDataNodes = std::move(matchedDataOutputs);
-
-    match.inputTestDataNodes = std::move(substituteDataInputs);
-    match.outputTestDataNodes = std::move(substituteDataOutputs);
-
-    // FIXME: populate these nodes
-    auto& startOps = match.startOpNodes;
-    auto& endOps = match.finishOpNodes;
-    auto& internalNodes = match.internalLayers;  // NB: these should also be placed layer by layer!!
-
-    UNUSED(startOps);
-    UNUSED(endOps);
-    UNUSED(internalNodes);
-
     return match;
 }
 
@@ -183,19 +170,6 @@ SubgraphMatch findPatternToSubstituteMatch(const cv::gimpl::GModel::Graph& patte
     SubgraphMatch match;
     match.inputDataNodes = std::move(matchedDataInputs);
     match.outputDataNodes = std::move(matchedDataOutputs);
-
-    match.inputTestDataNodes = substituteDataInputs;
-    match.outputTestDataNodes = substituteDataOutputs;
-
-    // FIXME: populate these nodes
-    auto& startOps = match.startOpNodes;
-    auto& endOps = match.finishOpNodes;
-    auto& internalNodes = match.internalLayers;  // NB: these should also be placed layer by layer!!
-
-    UNUSED(startOps);
-    UNUSED(endOps);
-    UNUSED(internalNodes);
-
     return match;
 }
 

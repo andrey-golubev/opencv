@@ -44,8 +44,7 @@ namespace gimpl {
         }
 
         bool partialOk() const {
-            return !inputDataNodes.empty() && !outputDataNodes.empty()
-                && !inputTestDataNodes.empty() && !outputTestDataNodes.empty();
+            return !inputDataNodes.empty() && !outputDataNodes.empty();
         }
 
        S nodes() const {

@@ -1137,7 +1137,6 @@ TEST(PatternMatchingFull, SubstituteGraphInTheMiddle)
         cv::gimpl::GCompiler compiler1(c, cv::descr_of(cv::gin(input)), compile_args());
         auto ade_graph_ptr = compiler1.generateGraph();
         compiler1.runPasses(*ade_graph_ptr);  // FIXME: in theory, there should be a lightweight compiler that executes only relevant passes
-        // compiler1.compileIslands(*ade_graph_ptr);  // FIXME: not required for pattern match?
         return ade_graph_ptr;
     };
 
@@ -1197,38 +1196,16 @@ TEST(PatternMatchingFull, SubstituteGraphInTheMiddle)
     // Run substituted version
     std::cout << "Compiling new graph..." << std::endl;
 
-    // FIXME: how to run new graph???: GCompiler::generateGraph() that takes graph in??
     cv::gimpl::GCompiler compiler(*cmg, cv::descr_of(cv::gin(input)), compile_args());
 #if 1  // alternative version
-    EXPECT_TRUE(compiler.transform(*ade_mg, mgm, pgm, sgm, csg->priv().m_ins, csg->priv().m_outs,
+    ASSERT_TRUE(compiler.transform(*ade_mg, mgm, pgm, sgm, csg->priv().m_ins, csg->priv().m_outs,
         cv::descr_of(cv::gin(input))));
 #else
-    EXPECT_TRUE(compiler.transform(mgm, pgm, sgm));
+    ASSERT_TRUE(compiler.transform(mgm, pgm, sgm));
 #endif
     std::cout << "---------------------" << std::endl;
     print_size("(after compiler.transform) main", mgm);
     std::cout << "---------------------" << std::endl;
-    // matching_test::initGModel(*ade_mg, cv::GIn(in), cv::GOut(out));
-
-    //-------------------Only for review purpose---------------------
-    //---------------------Not production code-----------------------
-    //Temporary tricks before the code relocation to the required place.
-
-#if 0
-    //--------Bad and UB trick to call protected method:-------------
-    class AdeGraphTrick : public cv::gimpl::GModel::ConstGraph {
-    public:
-        using cv::gimpl::GModel::ConstGraph::getCGraph;
-    };
-
-    auto constCompGraph = static_cast<cv::gimpl::GModel::ConstGraph>(compGraph);
-    auto& constCompGraphRef = constCompGraph;
-
-    auto& constCompAdeGraph = static_cast<AdeGraphTrick &>(constCompGraphRef).getCGraph();
-    auto& compAdeGraph = const_cast<ade::Graph&>(constCompAdeGraph);
-    //------------------End of the Bad and UB trick.-----------------
-#endif
-
 
     compiler.runPasses(*ade_mg);
     compiler.compileIslands(*ade_mg);
@@ -1240,7 +1217,7 @@ TEST(PatternMatchingFull, SubstituteGraphInTheMiddle)
     matching_test::myDumpDotToFile(*ade_mg, "transformed.dot");
 #endif
 
-    EXPECT_TRUE(AbsExact()(output_baseline, output_transformed));
+    ASSERT_TRUE(AbsExact()(output_baseline, output_transformed));
 }
 
 } // namespace opencv_test
