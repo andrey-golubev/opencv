@@ -105,6 +105,24 @@ namespace
         return result;
     }
 
+    std::unique_ptr<ade::Graph> newMinimalisticGraph(const cv::GComputation& c) {
+        // Generate ADE graph from expression-based computation
+        std::unique_ptr<ade::Graph> pG(new ade::Graph);
+        ade::Graph& g = *pG;
+
+        cv::gimpl::GModel::Graph gm(g);
+        cv::gimpl::GModel::init(gm);
+        cv::gimpl::GModelBuilder builder(g);
+        auto proto_slots = builder.put(c.priv().m_ins, c.priv().m_outs);
+
+        // Store Computation's protocol in metadata
+        cv::gimpl::Protocol p;
+        std::tie(p.inputs, p.outputs, p.in_nhs, p.out_nhs) = proto_slots;
+        gm.metadata().set(p);
+
+        return pG;
+    }
+
 } // anonymous namespace
 
 
@@ -297,8 +315,7 @@ bool cv::gimpl::GCompiler::transform(GModel::Graph& main, const GModel::Graph& p
 
 bool cv::gimpl::GCompiler::transform(ade::Graph& main, GModel::Graph& maing,
     const GModel::Graph& pattern, const GModel::Graph& substitute,
-    const cv::GProtoArgs& substitute_ins, const cv::GProtoArgs& substitute_outs,
-    const cv::GMetaArgs& substitute_metas) {
+    const cv::GProtoArgs& substitute_ins, const cv::GProtoArgs& substitute_outs) {
     validateInputMeta();
     validateOutProtoArgs();
 
@@ -308,6 +325,8 @@ bool cv::gimpl::GCompiler::transform(ade::Graph& main, GModel::Graph& maing,
         return false;
     }
 
+    GModel::Graph gm(main);
+
     // now build substitute graph into main graph
     // FIXME: first check that pattern can be matched to substitute (somehow without building)??
 
@@ -316,27 +335,24 @@ bool cv::gimpl::GCompiler::transform(ade::Graph& main, GModel::Graph& maing,
     // Build the subgraph graph which will need to replace the compound node
     const auto& proto_slots = builder.put(substitute_ins, substitute_outs);
 
-    const auto& in_nhs  = std::get<2>(proto_slots);
-    const auto& out_nhs = std::get<3>(proto_slots);
+    Protocol p;
+    std::tie(p.inputs, p.outputs, p.in_nhs, p.out_nhs) = proto_slots;
 
-    // FIXME: custom meta setting!
-    for (const auto& it : ade::util::indexed(in_nhs))
-    {
-        auto& data = maing.metadata(ade::util::value(it)).get<Data>();
-        data.meta = substitute_metas.at(ade::util::index(it));
-    }
-
-    this->runPasses(main);
-
-    // FIXME: there can be more than one match?
-    auto match2 = findPatternToSubstituteMatch(pattern, main, in_nhs, out_nhs);
-    if (!match2.partialOk()) {
-        return false;
-    }
+    auto match2 = findPatternToSubstituteMatch(pattern, main, pattern.metadata().get<Protocol>(), p);
+    GAPI_Assert(match2.partialOk());
 
     // redirect inputs
-    performSubstitutionAlt(maing, substitute, pattern, match1, match2);
+    performSubstitutionAlt(maing, match1, match2);
     return true;
+}
+
+bool cv::gimpl::GCompiler::transform(ade::Graph& main, const cv::GComputation& pattern,
+    const cv::GComputation& substitute) {
+    GModel::Graph gm(main);
+    auto patternG = newMinimalisticGraph(pattern);
+    auto substituteG = newMinimalisticGraph(substitute);  // FIXME: this one is not needed at all!
+    return transform(main, gm, *patternG, *substituteG, substitute.priv().m_ins,
+        substitute.priv().m_outs);
 }
 
 void cv::gimpl::GCompiler::runPasses(ade::Graph &g)

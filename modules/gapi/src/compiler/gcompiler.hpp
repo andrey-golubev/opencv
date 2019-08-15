@@ -13,6 +13,7 @@
 #include <opencv2/gapi/gkernel.hpp>
 #include <opencv2/gapi/infer.hpp>
 #include <opencv2/gapi/gcomputation.hpp>
+#include <opencv2/gapi/util/optional.hpp>
 
 #include <ade/execution_engine/execution_engine.hpp>
 
@@ -57,8 +58,10 @@ public:
     bool transform(ade::Graph& main, GModel::Graph& maing,
         const GModel::Graph& pattern,
         const GModel::Graph& substitute,
-        const cv::GProtoArgs& substitute_ins, const cv::GProtoArgs& substitute_outs,
-        const cv::GMetaArgs& substitute_metas);
+        const cv::GProtoArgs& substitute_ins, const cv::GProtoArgs& substitute_outs);
+
+    bool transform(ade::Graph& main, const cv::GComputation& pattern,
+        const cv::GComputation& substitute);
 };
 
 }}

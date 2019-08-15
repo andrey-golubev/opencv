@@ -1198,8 +1198,7 @@ TEST(PatternMatchingFull, SubstituteGraphInTheMiddle)
 
     cv::gimpl::GCompiler compiler(*cmg, cv::descr_of(cv::gin(input)), compile_args());
 #if 1  // alternative version
-    ASSERT_TRUE(compiler.transform(*ade_mg, mgm, pgm, sgm, csg->priv().m_ins, csg->priv().m_outs,
-        cv::descr_of(cv::gin(input))));
+    ASSERT_TRUE(compiler.transform(*ade_mg, *cpg, *csg));
 #else
     ASSERT_TRUE(compiler.transform(mgm, pgm, sgm));
 #endif

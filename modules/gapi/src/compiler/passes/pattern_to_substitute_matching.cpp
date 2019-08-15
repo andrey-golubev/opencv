@@ -6,6 +6,8 @@
 
 #include "pattern_matching.hpp"
 
+#include <ade/util/zip_range.hpp>
+
 #define UNUSED(x) (void)x
 
 namespace cv { namespace gimpl {
@@ -44,26 +46,8 @@ bool compareDataNodes(const ade::NodeHandle& first,
     if (firstData.storage != secondData.storage) {
         return false;
     }
-    // compare meta
-    // FIXME: GArrayDesc && GScalarDesc always return true in operator==
-    if (firstData.meta != secondData.meta) {
-        return false;
-    }
 
-
-#if 0
-    if (firstPorts.begin() != secondPorts.begin()) {
-        return false;
-    }
-
-    const auto& firstOutputEdges = first->outEdges();
-    const auto& secondOutputEdges = second->outEdges();
-
-    if (firstOutputEdges.size() != secondOutputEdges.size()) {
-        return false;
-    }
-#endif
-
+    // FIXME: is it enough to only check shape && storage?
     return true;
 };
 
@@ -90,6 +74,21 @@ SubgraphMatch::M matchDataNodes(const Graph& pattern, const Graph& substitute,
         // FIXME: same iterator supported?
         std::iter_swap(it, substituteNodes.begin() + (size - 1));
         size--;
+    }
+    return matched;
+}
+
+SubgraphMatch::M matchDataNodes2(const Graph& pattern, const Graph& substitute,
+    const std::vector<ade::NodeHandle>& patternNodes,
+    std::vector<ade::NodeHandle> substituteNodes) {
+    SubgraphMatch::M matched;
+    for (auto it : ade::util::zip(patternNodes, substituteNodes)) {
+        const auto& pNode = std::get<0>(it);
+        const auto& sNode = std::get<1>(it);
+        if (!compareDataNodes(pNode, pattern.metadata(pNode), sNode, substitute.metadata(sNode))) {
+            return {};
+        }
+        matched.insert({ pNode, sNode });
     }
     return matched;
 }
@@ -135,15 +134,15 @@ SubgraphMatch findPatternToSubstituteMatch(const Graph& pattern, const Graph& su
 
 SubgraphMatch findPatternToSubstituteMatch(const cv::gimpl::GModel::Graph& pattern,
     const cv::gimpl::GModel::Graph& substitute,
-    const std::vector<ade::NodeHandle>& substitute_ins,
-    const std::vector<ade::NodeHandle>& substitute_outs) {
+    const cv::gimpl::Protocol& patternP,
+    const cv::gimpl::Protocol& substituteP) {
     //---------------------------------------------------------------
     // Match data nodes which start and end our pattern and substitute
-    const auto& patternDataInputs = pattern.metadata().get<Protocol>().in_nhs;
-    const auto& patternDataOutputs = pattern.metadata().get<Protocol>().out_nhs;
+    const auto& patternDataInputs = patternP.in_nhs;
+    const auto& patternDataOutputs = patternP.out_nhs;
 
-    const auto& substituteDataInputs = substitute_ins;
-    const auto& substituteDataOutputs = substitute_outs;
+    const auto& substituteDataInputs = substituteP.in_nhs;
+    const auto& substituteDataOutputs = substituteP.out_nhs;
 
     // if number of data nodes doesn't match, abort
     if (patternDataInputs.size() != substituteDataInputs.size()
@@ -152,13 +151,13 @@ SubgraphMatch findPatternToSubstituteMatch(const cv::gimpl::GModel::Graph& patte
     }
 
     // for each pattern input we must find a corresponding substitute input
-    auto matchedDataInputs = matchDataNodes(pattern, substitute, patternDataInputs,
+    auto matchedDataInputs = matchDataNodes2(pattern, substitute, patternDataInputs,
         substituteDataInputs);
     // if nothing found, abort
     if (matchedDataInputs.empty()) {
         return {};
     }
-    auto matchedDataOutputs = matchDataNodes(pattern, substitute, patternDataOutputs,
+    auto matchedDataOutputs = matchDataNodes2(pattern, substitute, patternDataOutputs,
         substituteDataOutputs);
     // if nothing found, abort
     if (matchedDataOutputs.empty()) {

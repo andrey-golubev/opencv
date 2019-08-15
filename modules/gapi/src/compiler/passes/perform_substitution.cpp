@@ -165,10 +165,8 @@ void performSubstitution(Graph& graph, const Graph& substitute, const cv::gimpl:
     }
 }
 
-void performSubstitutionAlt(Graph& graph, const Graph& substitute,
-    const cv::gimpl::GModel::Graph& pattern,
+void performSubstitutionAlt(Graph& graph,
     const SubgraphMatch& patternToGraph, const SubgraphMatch& patternToSubstitute) {
-    UNUSED(substitute);
     // substitute input nodes
     for (const auto& inputNodePair : patternToGraph.inputDataNodes) {
         const auto& patternDataNode = inputNodePair.first;
@@ -188,7 +186,7 @@ void performSubstitutionAlt(Graph& graph, const Graph& substitute,
         GModel::redirectWriter(graph, substituteDataNode, graphDataNode);
     }
 
-    // 3) erase internal nodes
+    // erase internal nodes
     erase_many_pairs(graph, patternToSubstitute.inputDataNodes.begin(), patternToSubstitute.inputDataNodes.end());
     erase_many_pairs(graph, patternToGraph.startOpNodes.begin(), patternToGraph.startOpNodes.end());
     erase_many_nodes(graph, patternToGraph.internalLayers.begin(),
