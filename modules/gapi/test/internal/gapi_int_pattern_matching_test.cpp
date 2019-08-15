@@ -21,10 +21,6 @@
 
 #include "../common/gapi_tests_common.hpp"
 
-#include "compiler/passes/passes.hpp"
-
-#include <fstream>
-
 #include "logger.hpp"
 
 namespace opencv_test
@@ -283,7 +279,7 @@ TEST(PatternMatching, TestMultiplePatternOuts)
     EXPECT_EQ(matching_test::V({dx_nh, dy_nh}), match.protoOuts());
 }
 
-TEST(PatternMatching, TestPreprocSplit3)
+TEST(PatternMatching, TestPrepResizeSplit3)
 {
     // Pattern
     ade::Graph pg;
@@ -352,19 +348,19 @@ G_TYPED_KERNEL(GToNCHW, <GMatP(GMat)>, "test.toNCHW") {
     }
 };
 
-static GMat toNCHW(const GMat& src)
+static GMatP toNCHW(const GMat& src)
 {
     return GToNCHW::on(src);
 }
 
-TEST(PatternMatching, TestPreprocToNCHW)
+TEST(PatternMatching, TestPrepResizeToNCHW)
 {
     // Pattern
     ade::Graph pg;
     {
         GMat in;
         GMat tmp = cv::gapi::resize(in, cv::Size{224, 224});
-        GMat plr = toNCHW(tmp);
+        GMatP plr = toNCHW(tmp);
         matching_test::initGModel(pg, cv::GIn(in), cv::GOut(plr));
     }
 
@@ -373,7 +369,7 @@ TEST(PatternMatching, TestPreprocToNCHW)
     GMat y, uv;
     GMat bgr = cv::gapi::NV12toBGR(y, uv);
     GMat tmp = cv::gapi::resize(bgr, cv::Size{224, 224});
-    GMat plr = toNCHW(tmp);
+    GMatP plr = toNCHW(tmp);
     matching_test::initGModel(tg, cv::GIn(y, uv), cv::GOut(plr));
 
     // Pattern Matching
@@ -407,6 +403,61 @@ TEST(PatternMatching, TestPreprocToNCHW)
     EXPECT_EQ(matching_test::S{ op1_nh }, match.startOps());
     EXPECT_EQ(matching_test::S{ op2_nh }, match.finishOps());
     EXPECT_EQ(matching_test::V{ bgr_nh }, match.protoIns());
+    EXPECT_EQ(matching_test::V{ plr_nh }, match.protoOuts());
+}
+
+TEST(PatternMatching, TestPrepNV12toBGRToNCHW)
+{
+    // Pattern
+    ade::Graph pg;
+    {
+        GMat y, uv;
+        GMat bgr = cv::gapi::NV12toBGR(y, uv);
+        GMatP plr = toNCHW(bgr);
+        matching_test::initGModel(pg, cv::GIn(y, uv), cv::GOut(plr));
+    }
+
+    // Test
+    ade::Graph tg;
+    GMat y, uv;
+    GMat bgr = cv::gapi::NV12toBGR(y, uv);
+    GMatP plr = toNCHW(bgr);
+    GMat rsz = cv::gapi::resizeP(plr, cv::Size{224, 224});
+    matching_test::initGModel(tg, cv::GIn(y, uv), cv::GOut(rsz));
+
+    // Pattern Matching
+    cv::gimpl::GModel::Graph pgm(pg);
+    cv::gimpl::GModel::Graph tgm(tg);
+    cv::gimpl::SubgraphMatch match = cv::gimpl::findMatches(pg, tg);
+
+    // Inspecting results:
+    EXPECT_TRUE(match.ok());
+
+    auto nodes = match.nodes();
+    EXPECT_EQ(6u, nodes.size());
+
+    const auto y_nh = cv::gimpl::GModel::dataNodeOf(tgm, y);
+    const auto uv_nh = cv::gimpl::GModel::dataNodeOf(tgm, uv);
+    const auto bgr_nh = cv::gimpl::GModel::dataNodeOf(tgm, bgr);
+    const auto plr_nh = cv::gimpl::GModel::dataNodeOf(tgm, plr);
+
+    const auto op1_nh = cv::gimpl::GModel::producerOf(tgm, bgr_nh); // 1st NV12toBGR
+    const auto op2_nh = cv::gimpl::GModel::producerOf(tgm, plr_nh); // 2nd toNCHW
+
+    EXPECT_EQ(matching_test::S({y_nh, uv_nh, bgr_nh, plr_nh, op1_nh, op2_nh}),
+              nodes);
+
+    EXPECT_EQ(cv::gapi::imgproc::GNV12toBGR::id(), matching_test::opName(tgm, op1_nh));
+    EXPECT_EQ(GToNCHW::id(), matching_test::opName(tgm, op2_nh));
+
+    EXPECT_EQ(1u, bgr_nh->outEdges().size());
+    EXPECT_TRUE(matching_test::isConsumedBy(tgm, y_nh, op1_nh));
+    EXPECT_TRUE(matching_test::isConsumedBy(tgm, uv_nh, op1_nh));
+    EXPECT_TRUE(matching_test::isConsumedBy(tgm, bgr_nh, op2_nh));
+
+    EXPECT_EQ(matching_test::S{ op1_nh }, match.startOps());
+    EXPECT_EQ(matching_test::S{ op2_nh }, match.finishOps());
+    EXPECT_EQ(matching_test::V({ y_nh, uv_nh }), match.protoIns());
     EXPECT_EQ(matching_test::V{ plr_nh }, match.protoOuts());
 }
 
@@ -970,32 +1021,21 @@ TEST(PatternMatchingForSubstitute, TestSimple1)
     // Pattern Matching
     cv::gimpl::GModel::Graph pgm(pg);
     cv::gimpl::GModel::Graph sgm(sg);
-    const auto ok = [] (const cv::gimpl::SubgraphMatch& match) {
-        // FIXME: match.ok()?
-        return !match.inputDataNodes.empty() && !match.outputDataNodes.empty()
-            && !match.inputTestDataNodes.empty() && !match.outputTestDataNodes.empty();
-    };
     cv::gimpl::SubgraphMatch match = cv::gimpl::findPatternToSubstituteMatch(pg, sg);
 
     // Inspecting results:
-    EXPECT_TRUE(ok(match));
+    EXPECT_TRUE(match.partialOk());
 
-    auto nodes = match.nodes();
-    EXPECT_EQ(2u, nodes.size());  // operations not remembered, so only input/output nodes are here
+    EXPECT_EQ(1u, match.inputDataNodes.size());
+    EXPECT_EQ(1u, match.outputDataNodes.size());
 
     const auto in_nh = cv::gimpl::GModel::dataNodeOf(sgm, in);
     const auto out_nh = cv::gimpl::GModel::dataNodeOf(sgm, out);
     const auto op_nh = cv::gimpl::GModel::producerOf(sgm, out_nh);
 
     // FIXME: enable disabled expects?
-    // EXPECT_EQ(matching_test::S({in_nh, out_nh, op_nh}), nodes);
-    EXPECT_EQ(matching_test::S({in_nh, out_nh}), nodes);
     EXPECT_EQ(cv::gapi::core::GNot::id(), matching_test::opName(sgm, op_nh));
     EXPECT_TRUE(matching_test::isConsumedBy(sgm, in_nh, op_nh));
-    // EXPECT_EQ(matching_test::S{op_nh}, match.startOps());
-    // EXPECT_EQ(matching_test::S{op_nh}, match.finishOps());
-    EXPECT_EQ(matching_test::V{in_nh}, match.protoIns());
-    EXPECT_EQ(matching_test::V{out_nh}, match.protoOuts());
 }
 
 TEST(PatternMatchingForSubstitute, DISABLED_TestSimple2)
