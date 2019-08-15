@@ -50,16 +50,6 @@ public:
     void       compileIslands(ade::Graph &g); // Instantiate GIslandExecutables in GIslandModel
     GCompiled  produceCompiled(GPtr &&pg);    // Produce GCompiled from processed GModel
 
-    // FIXME: can't use optional -> ade::Graph/GModel::Graph not copy-able
-    bool transform(GModel::Graph& main, const GModel::Graph& pattern,
-        const GModel::Graph& substitute);
-
-    // FIXME: main && maing - the same thing
-    bool transform(ade::Graph& main, GModel::Graph& maing,
-        const GModel::Graph& pattern,
-        const GModel::Graph& substitute,
-        const cv::GProtoArgs& substitute_ins, const cv::GProtoArgs& substitute_outs);
-
     bool transform(ade::Graph& main, const cv::GComputation& pattern,
         const cv::GComputation& substitute);
 };

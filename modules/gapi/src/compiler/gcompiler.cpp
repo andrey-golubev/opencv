@@ -294,65 +294,33 @@ cv::gimpl::GCompiler::GPtr cv::gimpl::GCompiler::generateGraph()
     return pG;
 }
 
-bool cv::gimpl::GCompiler::transform(GModel::Graph& main, const GModel::Graph& pattern,
-    const GModel::Graph& substitute) {
-    validateInputMeta();
-    validateOutProtoArgs();
-
-    // FIXME: there can be more than one match?
-    auto match1 = findMatches(pattern, main);
-    if (!match1.ok()) {
-        return false;
-    }
-    // FIXME: there can be more than one match?
-    auto match2 = findPatternToSubstituteMatch(pattern, substitute);
-    if (!match2.partialOk()) {
-        return false;
-    }
-    performSubstitution(main, substitute, pattern, match1, match2);
-    return true;
-}
-
-bool cv::gimpl::GCompiler::transform(ade::Graph& main, GModel::Graph& maing,
-    const GModel::Graph& pattern, const GModel::Graph& substitute,
-    const cv::GProtoArgs& substitute_ins, const cv::GProtoArgs& substitute_outs) {
-    validateInputMeta();
-    validateOutProtoArgs();
-
-    // FIXME: there can be more than one match?
-    auto match1 = findMatches(pattern, main);
-    if (!match1.ok()) {
-        return false;
-    }
-
-    GModel::Graph gm(main);
-
-    // now build substitute graph into main graph
-    // FIXME: first check that pattern can be matched to substitute (somehow without building)??
-
-    // FIXME: there's no non-dynamic input at this level, right?
-    cv::gimpl::GModelBuilder builder(main);
-    // Build the subgraph graph which will need to replace the compound node
-    const auto& proto_slots = builder.put(substitute_ins, substitute_outs);
-
-    Protocol p;
-    std::tie(p.inputs, p.outputs, p.in_nhs, p.out_nhs) = proto_slots;
-
-    auto match2 = findPatternToSubstituteMatch(pattern, main, pattern.metadata().get<Protocol>(), p);
-    GAPI_Assert(match2.partialOk());
-
-    // redirect inputs
-    performSubstitutionAlt(maing, match1, match2);
-    return true;
-}
-
 bool cv::gimpl::GCompiler::transform(ade::Graph& main, const cv::GComputation& pattern,
     const cv::GComputation& substitute) {
     GModel::Graph gm(main);
+
+    // 1. create standalone pattern graph from GComputation
     auto patternG = newMinimalisticGraph(pattern);
-    auto substituteG = newMinimalisticGraph(substitute);  // FIXME: this one is not needed at all!
-    return transform(main, gm, *patternG, *substituteG, substitute.priv().m_ins,
-        substitute.priv().m_outs);
+
+    // FIXME: there can be more than one match?
+    auto match1 = findMatches(*patternG, gm);
+    if (!match1.ok()) {
+        return false;
+    }
+
+    // 2. build substitute graph into main graph
+    cv::gimpl::GModelBuilder builder(main);
+    const auto& proto_slots = builder.put(substitute.priv().m_ins, substitute.priv().m_outs);
+    Protocol p;
+    std::tie(p.inputs, p.outputs, p.in_nhs, p.out_nhs) = proto_slots;
+
+    // 3. match pattern ins/outs to substitute ins/outs
+    auto match2 = findPatternToSubstituteMatch(*patternG, main,
+        GModel::Graph(*patternG).metadata().get<Protocol>(), p);
+    GAPI_Assert(match2.partialOk());
+
+    // 4. do substitution
+    performSubstitutionAlt(gm, match1, match2);
+    return true;
 }
 
 void cv::gimpl::GCompiler::runPasses(ade::Graph &g)

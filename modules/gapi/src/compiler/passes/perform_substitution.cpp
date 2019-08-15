@@ -65,6 +65,7 @@ void erase_many_pairs(Graph& g, It first, It last) {
 }
 }  // anonymous namespace
 
+#if 0  // this code is too custom
 void performSubstitution(Graph& graph, const Graph& substitute, const cv::gimpl::GModel::Graph& pattern,
     const SubgraphMatch& patternToGraph, const SubgraphMatch& patternToSubstitute) {
     // FIXME: start from "input" OP nodes, not DATA -> this should look prettier??
@@ -164,6 +165,7 @@ void performSubstitution(Graph& graph, const Graph& substitute, const cv::gimpl:
         graph.metadata(node).erase<Island>();
     }
 }
+#endif
 
 void performSubstitutionAlt(Graph& graph,
     const SubgraphMatch& patternToGraph, const SubgraphMatch& patternToSubstitute) {

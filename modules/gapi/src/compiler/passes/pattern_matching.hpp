@@ -104,12 +104,13 @@ namespace gimpl {
         const cv::gimpl::Protocol& patternP,
         const cv::gimpl::Protocol& substituteP);
 
-    // FIXME: delete pattern from here
+#if 0  // this code is too custom
     GAPI_EXPORTS void performSubstitution(cv::gimpl::GModel::Graph& graph,
         const cv::gimpl::GModel::Graph& substitute,
         const cv::gimpl::GModel::Graph& pattern,
         const SubgraphMatch& patternToGraph,
         const SubgraphMatch& patternToSubstitute);
+#endif
 
     GAPI_EXPORTS void performSubstitutionAlt(cv::gimpl::GModel::Graph& graph,
         const cv::gimpl::SubgraphMatch& patternToGraph,

@@ -1108,7 +1108,7 @@ TEST(PatternMatchingFull, DISABLED_SubstituteGraphInTheBeginning)
 
     // FIXME: how to run new graph???: GCompiler::generateGraph() that takes graph in??
     cv::gimpl::GCompiler compiler(*cmg, cv::descr_of(cv::gin(input)), compile_args());
-    EXPECT_TRUE(compiler.transform(mgm, pgm, sgm));
+    EXPECT_TRUE(compiler.transform(*ade_mg, *cpg, *csg));
     compiler.runPasses(*ade_mg);
     compiler.compileIslands(*ade_mg);
     auto compiled = compiler.produceCompiled(std::move(ade_mg));
