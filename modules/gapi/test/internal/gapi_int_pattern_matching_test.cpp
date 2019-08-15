@@ -1040,8 +1040,7 @@ TEST(PatternMatchingForSubstitute, DISABLED_TestSimple2)
     EXPECT_EQ(matching_test::V{tmp_nh}, match.protoOuts());
 }
 
-// FIXME: doesn't work for now
-TEST(PatternMatchingFull, DISABLED_SubstituteGraphInTheBeginning)
+TEST(PatternMatchingFull, SubstituteGraphInTheBeginning)
 {
     cv::Size in_sz(640, 480);
     cv::Mat input(in_sz, CV_8UC3);
@@ -1059,8 +1058,7 @@ TEST(PatternMatchingFull, DISABLED_SubstituteGraphInTheBeginning)
     const auto ade_get_graph = [&] (const cv::GComputation& c) {
         cv::gimpl::GCompiler compiler1(c, cv::descr_of(cv::gin(input)), compile_args());
         auto ade_graph_ptr = compiler1.generateGraph();
-        compiler1.runPasses(*ade_graph_ptr);  // FIXME: in theory, there should be a lightweight compiler that executes only relevant passes
-        // compiler1.compileIslands(*ade_graph_ptr);  // FIXME: not required for pattern match?
+        compiler1.runPasses(*ade_graph_ptr);  // FIXME: only for dumpDot
         return ade_graph_ptr;
     };
 
@@ -1083,7 +1081,9 @@ TEST(PatternMatchingFull, DISABLED_SubstituteGraphInTheBeginning)
         GMat out = cv::gapi::resize(in, out_sz, fx, fy, interpolation);
         cpg.reset(new cv::GComputation(cv::GIn(in), cv::GOut(out)));
     }
+
     auto ade_pg = ade_get_graph(*cpg);
+    matching_test::myDumpDotToFile(*ade_pg, "pattern.dot");
 
     // Substitute
     std::unique_ptr<cv::GComputation> csg;
@@ -1096,17 +1096,11 @@ TEST(PatternMatchingFull, DISABLED_SubstituteGraphInTheBeginning)
         GMat out = cv::gapi::merge3(resize(b), resize(g), resize(r));
         csg.reset(new cv::GComputation(cv::GIn(in), cv::GOut(out)));
     }
+
     auto ade_sg = ade_get_graph(*csg);
+    matching_test::myDumpDotToFile(*ade_sg, "pattern.dot");
 
-    // Pattern Matching
-    cv::gimpl::GModel::Graph mgm(*ade_mg);  // main
-    cv::gimpl::GModel::Graph pgm(*ade_pg);  // pattern
-    cv::gimpl::GModel::Graph sgm(*ade_sg);  // substitute
-
-    // Run substituted version
-    std::cout << "Compiling new graph..." << std::endl;
-
-    // FIXME: how to run new graph???: GCompiler::generateGraph() that takes graph in??
+    // Substitute && run
     cv::gimpl::GCompiler compiler(*cmg, cv::descr_of(cv::gin(input)), compile_args());
     EXPECT_TRUE(compiler.transform(*ade_mg, *cpg, *csg));
     compiler.runPasses(*ade_mg);
@@ -1136,7 +1130,7 @@ TEST(PatternMatchingFull, SubstituteGraphInTheMiddle)
     const auto ade_get_graph = [&] (const cv::GComputation& c) {
         cv::gimpl::GCompiler compiler1(c, cv::descr_of(cv::gin(input)), compile_args());
         auto ade_graph_ptr = compiler1.generateGraph();
-        compiler1.runPasses(*ade_graph_ptr);  // FIXME: in theory, there should be a lightweight compiler that executes only relevant passes
+        compiler1.runPasses(*ade_graph_ptr);  // FIXME: only for dumpDot
         return ade_graph_ptr;
     };
 
@@ -1159,8 +1153,8 @@ TEST(PatternMatchingFull, SubstituteGraphInTheMiddle)
         GMat out = cv::gapi::resize(in, out_sz, fx, fy, interpolation);
         cpg.reset(new cv::GComputation(cv::GIn(in), cv::GOut(out)));
     }
-    auto ade_pg = ade_get_graph(*cpg);
 
+    auto ade_pg = ade_get_graph(*cpg);
     matching_test::myDumpDotToFile(*ade_pg, "pattern.dot");
 
     // Substitute
@@ -1174,47 +1168,19 @@ TEST(PatternMatchingFull, SubstituteGraphInTheMiddle)
         GMat out = cv::gapi::merge3(resize(b), resize(g), resize(r));
         csg.reset(new cv::GComputation(cv::GIn(in), cv::GOut(out)));
     }
-    auto ade_sg = ade_get_graph(*csg);
 
+    auto ade_sg = ade_get_graph(*csg);
     matching_test::myDumpDotToFile(*ade_sg, "substitute.dot");
 
-    // Pattern Matching
-    cv::gimpl::GModel::Graph mgm(*ade_mg);  // main
-    cv::gimpl::GModel::Graph pgm(*ade_pg);  // pattern
-    cv::gimpl::GModel::Graph sgm(*ade_sg);  // substitute
-
-    const auto print_size = [] (std::string name, const cv::gimpl::GModel::Graph& g) {
-        std::cout << name << " graph nodes().size() = " << g.nodes().size() << std::endl;
-    };
-
-    std::cout << "---------------------" << std::endl;
-    print_size("main", mgm);
-    print_size("pattern", pgm);
-    print_size("substitute", sgm);
-    std::cout << "---------------------" << std::endl;
-
-    // Run substituted version
-    std::cout << "Compiling new graph..." << std::endl;
-
+    // Substitute && run
     cv::gimpl::GCompiler compiler(*cmg, cv::descr_of(cv::gin(input)), compile_args());
-#if 1  // alternative version
     ASSERT_TRUE(compiler.transform(*ade_mg, *cpg, *csg));
-#else
-    ASSERT_TRUE(compiler.transform(mgm, pgm, sgm));
-#endif
-    std::cout << "---------------------" << std::endl;
-    print_size("(after compiler.transform) main", mgm);
-    std::cout << "---------------------" << std::endl;
 
     compiler.runPasses(*ade_mg);
     compiler.compileIslands(*ade_mg);
     auto compiled = compiler.produceCompiled(std::move(ade_mg));
 
     compiled(input, output_transformed);
-
-#if 0  // FIXME: broken in alternative version
-    matching_test::myDumpDotToFile(*ade_mg, "transformed.dot");
-#endif
 
     ASSERT_TRUE(AbsExact()(output_baseline, output_transformed));
 }
