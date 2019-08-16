@@ -26,6 +26,8 @@ namespace gimpl {
         using S =  std::unordered_set< ade::NodeHandle
                                      , ade::HandleHasher<ade::Node>
                                      >;
+        // FIXME: inputDataNodes && outputDataNodes can be a part of a special struct (e.g.
+        //        SubgraphMatch::Base?)
         M inputDataNodes;
         M startOpNodes;
         M finishOpNodes;

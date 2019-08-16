@@ -34,8 +34,8 @@ ade::NodeHandle create(const Graph& src, Graph& dst, const ade::NodeHandle& orig
 
 // Finds key of src_node in src_map (searching by value)
 ade::NodeHandle findKey(const ade::NodeHandle& src_node, const SubgraphMatch::M& src_map) {
-    using NH = ade::NodeHandle;
-    auto it = std::find_if(src_map.cbegin(), src_map.cend(), [&] (const std::pair<NH, NH>& p) {
+    using nh_pair = std::pair<ade::NodeHandle, ade::NodeHandle>;
+    auto it = std::find_if(src_map.cbegin(), src_map.cend(), [&] (const nh_pair& p) {
         return p.second == src_node;
     });
     GAPI_Assert(it != src_map.cend());
@@ -45,7 +45,6 @@ ade::NodeHandle findKey(const ade::NodeHandle& src_node, const SubgraphMatch::M&
 // Finds src_node in src_map (searching by value) then returns dst_map[found]
 ade::NodeHandle find(const ade::NodeHandle& src_node, const SubgraphMatch::M& src_map,
     const SubgraphMatch::M& dst_map) {
-    using NH = ade::NodeHandle;
     auto key = findKey(src_node, src_map);
     return dst_map.at(key);
 }
