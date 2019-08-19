@@ -12,7 +12,6 @@
 #define UNUSED(x) (void)x
 
 namespace cv { namespace gimpl {
-
 namespace {
 using Graph = GModel::Graph;
 
@@ -74,6 +73,7 @@ void performSubstitution(Graph& graph,
         patternToSubstitute.outputDataNodes.end(), get_from_pair);
 
     // FIXME: workaround??
+    // erase Island information
     for (auto node : graph.nodes()) {
         graph.metadata(node).erase<Island>();
     }

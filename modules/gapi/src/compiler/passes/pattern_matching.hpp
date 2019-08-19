@@ -38,7 +38,12 @@ namespace gimpl {
 
         std::list<ade::NodeHandle> internalLayers;
 
-        // FIXME: switch to operator bool() instead
+        bool empty() const {
+            return    inputDataNodes.empty() && startOpNodes.empty()
+                   && finishOpNodes.empty() && outputDataNodes.empty()
+                   && inputTestDataNodes.empty() && outputTestDataNodes.empty();
+        }
+
         bool ok() const {
             return    !inputDataNodes.empty() && !startOpNodes.empty()
                    && !finishOpNodes.empty() && !outputDataNodes.empty()

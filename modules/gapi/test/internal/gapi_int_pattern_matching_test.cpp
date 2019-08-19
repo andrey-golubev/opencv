@@ -9,6 +9,8 @@
 
 #include <stdexcept>
 
+#include <opencv2/gapi/gtransform.hpp>
+
 #include "compiler/gmodel.hpp"
 #include "compiler/gmodel_priv.hpp"
 
@@ -1010,7 +1012,7 @@ using GraphCreator = std::function<std::tuple<
     std::vector<ade::NodeHandle>>()>;
 struct PatternMatchingMatchPatternToSubsitute :
     TestWithParam<std::tuple<GraphCreator, GraphCreator>> {};
-TEST_P(PatternMatchingMatchPatternToSubsitute, MatchFoundTestUnified)
+TEST_P(PatternMatchingMatchPatternToSubsitute, TestMatchFound)
 {
     std::unique_ptr<ade::Graph> pg;  // pattern
     std::vector<ade::NodeHandle> p_ins, p_outs;  // input/output nodes of pattern
@@ -1054,7 +1056,7 @@ TEST_P(PatternMatchingMatchPatternToSubsitute, MatchFoundTestUnified)
 
 struct PatternMatchingMatchPatternToSubsituteBadArg :
     TestWithParam<std::tuple<GraphCreator, GraphCreator>> {};
-TEST_P(PatternMatchingMatchPatternToSubsituteBadArg, MatchNotFoundTestUnified)
+TEST_P(PatternMatchingMatchPatternToSubsituteBadArg, TestMatchNotFound)
 {
     std::unique_ptr<ade::Graph> pg;  // pattern
     std::vector<ade::NodeHandle> p_ins, p_outs;  // input/output nodes of pattern
@@ -1075,9 +1077,7 @@ TEST_P(PatternMatchingMatchPatternToSubsituteBadArg, MatchNotFoundTestUnified)
     // FIXME: check anything else?
     EXPECT_FALSE(match.partialOk());
     EXPECT_FALSE(match.ok());
-    EXPECT_TRUE(match.inputDataNodes.empty() && match.startOpNodes.empty()
-        && match.finishOpNodes.empty() && match.outputDataNodes.empty()
-        && match.inputTestDataNodes.empty() && match.outputTestDataNodes.empty());
+    EXPECT_TRUE(match.empty());
 }
 
 INSTANTIATE_TEST_CASE_P(OneInputOneOutput, PatternMatchingMatchPatternToSubsitute,
@@ -1606,17 +1606,17 @@ TEST(PatternMatchingFull, SubstituteGraphInTheMiddle)
 }
 
 using CompCreator = std::function<cv::GComputation()>;
-struct PatternMatchingHighLevel :
-    TestWithParam<std::tuple<CompCreator, CompCreator, CompCreator>> {};
-
-TEST_P(PatternMatchingHighLevel, UnifiedTest) {
+using TransformsCreator = std::function<cv::gapi::GKernelPackage()>;
+struct PatternMatchingIntegration :
+    TestWithParam<std::tuple<CompCreator, TransformsCreator>> {};
+TEST_P(PatternMatchingIntegration, TestApplyTransformation) {
     cv::Size in_sz(640, 480);
     cv::Mat input(in_sz, CV_8UC3);
     cv::randu(input, cv::Scalar::all(0), cv::Scalar::all(100));
     cv::Mat orig_output, transformed_output;
 
-    const auto compile_args = [] () {
-        return cv::compile_args(cv::gapi::GKernelPackage{});
+    const auto compile_args = [this] () {
+        return cv::compile_args(std::get<1>(GetParam())());
     };
 
     {
@@ -1626,49 +1626,51 @@ TEST_P(PatternMatchingHighLevel, UnifiedTest) {
     }
 
     auto mainC = std::get<0>(GetParam())();  // get new copy with new Priv
-    auto patternC = std::get<1>(GetParam())();
-    auto substituteC = std::get<2>(GetParam())();
 
-    // Generate original graph
+    // Generate transformed graph (passing transformations via compile args)
     cv::gimpl::GCompiler compiler(mainC, cv::descr_of(cv::gin(input)), compile_args());
-    auto graph = compiler.generateGraph();
-
-    // Apply substitution
-    ASSERT_TRUE(compiler.transform(*graph, patternC, substituteC));
-
-    // Run transformed graph
-    compiler.runPasses(*graph);
-    compiler.compileIslands(*graph);
-    auto compiled = compiler.produceCompiled(std::move(graph));
+    auto compiled = compiler.compile();
     compiled(input, transformed_output);
 
     // Compare
     ASSERT_TRUE(AbsExact()(orig_output, transformed_output));
 }
 
+GAPI_TRANSFORM(Transform1, <cv::GMat(cv::GMat)>, "test.transform1")
+{
+    static cv::GMat pattern(const cv::GMat& in)
+    {
+        cv::GMat b, g, r;
+        std::tie(b, g, r) = cv::gapi::split3(in);
+        auto resize = std::bind(&cv::gapi::resize,
+            std::placeholders::_1, cv::Size(100, 100), 0, 0, cv::INTER_LINEAR);
+        cv::GMat out = cv::gapi::merge3(resize(b), resize(g), resize(r));
+        return out;
+    }
+
+    static cv::GMat substitute(const cv::GMat& in)
+    {
+        cv::GMat out = cv::gapi::resize(in, cv::Size(100, 100), 0, 0, cv::INTER_LINEAR);
+        return out;
+    }
+};
+
 // FIXME: add more tests to this part
-INSTANTIATE_TEST_CASE_P(SubstituteGraphInTheBeginning, PatternMatchingHighLevel,
-    Combine(Values([] () {
-                GMat in;
-                GMat to_be_replaced = cv::gapi::resize(in, cv::Size(100, 100),
-                    0, 0, cv::INTER_LINEAR);
-                GMat out = cv::gapi::mul(to_be_replaced, cv::gapi::bitwise_not(to_be_replaced));
-                return cv::GComputation(cv::GIn(in), cv::GOut(out));
-            }),
-            Values([] () {
-                GMat in;
-                GMat out = cv::gapi::resize(in, cv::Size(100, 100),
-                    0, 0, cv::INTER_LINEAR);
-                return cv::GComputation(cv::GIn(in), cv::GOut(out));
-            }),
-            Values([] () {
-                GMat in;
-                GMat b, g, r;
-                std::tie(b, g, r) = cv::gapi::split3(in);
-                auto resize = std::bind(&cv::gapi::resize, std::placeholders::_1, cv::Size(100, 100),
-                    0, 0, cv::INTER_LINEAR);
-                GMat out = cv::gapi::merge3(resize(b), resize(g), resize(r));
-                return cv::GComputation(cv::GIn(in), cv::GOut(out));
-            })));
+INSTANTIATE_TEST_CASE_P(All, PatternMatchingIntegration,
+    Values(std::make_tuple(
+                [] () {
+                    GMat in;
+                    cv::GMat b, g, r;
+                    std::tie(b, g, r) = cv::gapi::split3(in);
+                    auto resize = std::bind(&cv::gapi::resize,
+                        std::placeholders::_1, cv::Size(100, 100), 0, 0, cv::INTER_LINEAR);
+                    GMat tmp = cv::gapi::merge3(resize(b), resize(g), resize(r));
+                    GMat out = cv::gapi::bitwise_not(tmp);
+                    return cv::GComputation(cv::GIn(in), cv::GOut(out));
+                },
+                [] () {
+                    return cv::gapi::kernels<Transform1>();
+                })
+            ));
 
 } // namespace opencv_test

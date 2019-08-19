@@ -60,6 +60,13 @@ void resolveKernels(ade::passes::PassContext   &ctx,
 void fuseIslands(ade::passes::PassContext &ctx);
 void syncIslandTags(ade::passes::PassContext &ctx);
 
+void checkTransformations(ade::passes::PassContext &ctx,
+                          const gapi::GKernelPackage &transformations,
+                          std::vector<std::unique_ptr<ade::Graph>>& generatedPatterns);
+void applyTransformations(ade::passes::PassContext &ctx,
+                          const gapi::GKernelPackage &transformations,
+                          const std::vector<std::unique_ptr<ade::Graph>>& preGeneratedPatterns);
+
 }} // namespace gimpl::passes
 
 } // namespace cv
