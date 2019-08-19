@@ -1025,7 +1025,7 @@ TEST_P(PatternMatchingMatchPatternToSubsitute, MatchFoundTestUnified)
     // match
     cv::gimpl::GModel::Graph pgm(*pg);
     cv::gimpl::GModel::Graph sgm(*sg);
-    auto match = cv::gimpl::findPatternToSubstituteMatch(pgm, sgm,
+    auto match = cv::gimpl::matchPatternToSubstitute(pgm, sgm,
         pgm.metadata().get<cv::gimpl::Protocol>(), sgm.metadata().get<cv::gimpl::Protocol>());
 
     // check the result
@@ -1043,7 +1043,7 @@ TEST_P(PatternMatchingMatchPatternToSubsitute, MatchFoundTestUnified)
             const auto& s_node = s_nodes[i];
 
             auto found = matched_nodes.find(p_node);
-            ASSERT_NE(matched_nodes.cend(), found);  // asssert - cannot de-reference end()
+            ASSERT_NE(matched_nodes.cend(), found);  // assert - cannot de-reference end()
             EXPECT_EQ(s_node, found->second);
         }
     };
@@ -1069,7 +1069,7 @@ TEST_P(PatternMatchingMatchPatternToSubsituteBadArg, MatchNotFoundTestUnified)
     // match
     cv::gimpl::GModel::Graph pgm(*pg);
     cv::gimpl::GModel::Graph sgm(*sg);
-    auto match = cv::gimpl::findPatternToSubstituteMatch(pgm, sgm,
+    auto match = cv::gimpl::matchPatternToSubstitute(pgm, sgm,
         pgm.metadata().get<cv::gimpl::Protocol>(), sgm.metadata().get<cv::gimpl::Protocol>());
 
     // FIXME: check anything else?
