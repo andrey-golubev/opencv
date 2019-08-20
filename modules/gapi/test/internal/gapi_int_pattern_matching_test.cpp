@@ -1453,6 +1453,7 @@ INSTANTIATE_TEST_CASE_P(ManyInputsManyOutputs, PatternMatchingMatchPatternToSubs
             })));
 
 // --------------------------------------------------------------------------------------
+// Accuracy integration tests (GComputation-level)
 
 namespace {
 // custom "listener" to check what kernels are called within the test
@@ -1534,6 +1535,18 @@ GAPI_OCV_KERNEL(MyPlanarResizeImpl, MyPlanarResize) {
         }
     }
 };
+G_TYPED_KERNEL(MyInterleavedResize, <GMat(GMat, Size, int)>, "test.my_planar_resize") {
+    static GMatDesc outMeta(GMatDesc in, Size sz, int interp) {
+        return cv::gapi::core::GResize::outMeta(in, sz, 0.0, 0.0, interp);
+    }
+};
+GAPI_OCV_KERNEL(MyInterleavedResizeImpl, MyInterleavedResize) {
+    static void run(const cv::Mat& in, cv::Size out_sz, int interp, cv::Mat &out)
+    {
+        getListener().counts[MyInterleavedResize::id()]++;
+        cv::resize(in, out, out_sz, 0.0, 0.0, interp);
+    }
+};
 GAPI_OCV_KERNEL(MyToNCHWImpl, GToNCHW) {
     static void run(const cv::Mat& in, cv::Mat& out)
     {
@@ -1565,6 +1578,36 @@ GAPI_TRANSFORM(NV12Transform, <cv::GMat(cv::GMat, cv::GMat)>, "test.nv12_transfo
         return out;
     }
 };
+GAPI_TRANSFORM(NV12TransformReversed, <cv::GMat(cv::GMat, cv::GMat)>, "test.nv12_transform_rev")
+{
+    static cv::GMat pattern(const cv::GMat& y, const cv::GMat& uv)
+    {
+        GMat out = cv::gapi::NV12toBGR(y, uv);
+        return out;
+    }
+
+    static cv::GMat substitute(const cv::GMat& y, const cv::GMat& uv)
+    {
+        GMat out = MyNV12toBGR::on(y, uv);
+        return out;
+    }
+};
+GAPI_TRANSFORM(ResizeTransform, <cv::GMat(cv::GMat)>, "test.resize_transform")
+{
+    static cv::GMat pattern(const cv::GMat& in)
+    {
+        GMat b, g, r;
+        std::tie(b, g, r) = cv::gapi::split3(in);
+        const auto resize = std::bind(&cv::gapi::resize, std::placeholders::_1,
+            cv::Size(100, 100), 0, 0, cv::INTER_AREA);
+        return cv::gapi::merge3(resize(b), resize(g), resize(r));
+    }
+
+    static cv::GMat substitute(const cv::GMat& in)
+    {
+        return MyInterleavedResize::on(in, cv::Size(100, 100), cv::INTER_AREA);
+    }
+};
 GAPI_TRANSFORM(ChainTransform1, <GMatP(GMat)>, "Resize + toNCHW -> toNCHW + PlanarResize")
 {
     static GMatP pattern(const cv::GMat& in)
@@ -1590,47 +1633,77 @@ GAPI_TRANSFORM(ChainTransform2, <GMatP(GMat, GMat)>, "NV12toBGR + toNCHW -> NV12
     }
 };
 
-// FIXME: add more tests to this part
-INSTANTIATE_TEST_CASE_P(All, PatternMatchingIntegration,
+INSTANTIATE_TEST_CASE_P(Everything, PatternMatchingIntegration,
     Values(
-            std::make_tuple(
-                [] () {
-                    GMat in1, in2;
-                    GMat bgr = MyNV12toBGR::on(in1, in2);
-                    GMat out = cv::gapi::resize(bgr, cv::Size(100, 100));
-                    return cv::GComputation(cv::GIn(in1, in2), cv::GOut(out));
-                },
-                [] (const KernelListener& l) {
-                    ASSERT_EQ(1u, l.counts.size());
-                    // called in original graph:
-                    ASSERT_NE(l.counts.cend(), l.counts.find(MyNV12toBGR::id()));
-                    ASSERT_EQ(1u, l.counts.at(MyNV12toBGR::id()));
-                },
-                cv::compile_args(cv::gapi::kernels<MyNV12toBGRImpl>()),
-                cv::compile_args(cv::gapi::kernels<MyNV12toBGRImpl, NV12Transform>())),
-            std::make_tuple(
-                [] () {
-                    GMat in1, in2;
-                    GMat bgr = MyNV12toBGR::on(in1, in2);
-                    GMat resized = cv::gapi::resize(bgr, cv::Size(60, 60));
-                    GMatP out = GToNCHW::on(resized);
-                    return cv::GComputation(cv::GIn(in1, in2), cv::GOut(out));
-                },
-                [] (const KernelListener& l) {
-                    ASSERT_EQ(3u, l.counts.size());
-                    // called in original graph:
-                    ASSERT_NE(l.counts.cend(), l.counts.find(MyNV12toBGR::id()));
-                    ASSERT_NE(l.counts.cend(), l.counts.find(GToNCHW::id()));
-                    ASSERT_EQ(1u, l.counts.at(MyNV12toBGR::id()));
-                    ASSERT_EQ(1u, l.counts.at(GToNCHW::id()));
-                    // called in transformed graph:
-                    ASSERT_NE(l.counts.cend(), l.counts.find(MyPlanarResize::id()));
-                    ASSERT_EQ(1u, l.counts.at(MyPlanarResize::id()));
-                },
-                cv::compile_args(cv::gapi::kernels<MyNV12toBGRImpl, MyToNCHWImpl>()),
-                cv::compile_args(
-                    cv::gapi::kernels<MyPlanarResizeImpl, ChainTransform1, ChainTransform2>()))
+        std::make_tuple(
+            [] () {
+                GMat in1, in2;
+                GMat bgr = MyNV12toBGR::on(in1, in2);
+                GMat out = cv::gapi::resize(bgr, cv::Size(100, 100));
+                return cv::GComputation(cv::GIn(in1, in2), cv::GOut(out));
+            },
+            [] (const KernelListener& l) {
+                ASSERT_EQ(1u, l.counts.size());
+                // called in original graph:
+                ASSERT_NE(l.counts.cend(), l.counts.find(MyNV12toBGR::id()));
+                ASSERT_EQ(1u, l.counts.at(MyNV12toBGR::id()));
+            },
+            cv::compile_args(cv::gapi::kernels<MyNV12toBGRImpl>()),
+            cv::compile_args(cv::gapi::kernels<MyNV12toBGRImpl, NV12Transform>())),
+        std::make_tuple(
+            [] () {
+                GMat in1, in2;
+                GMat bgr = cv::gapi::NV12toBGR(in1, in2);
+                GMat b, g, r;
+                std::tie(b, g, r) = cv::gapi::split3(bgr);
+                const auto resize = std::bind(&cv::gapi::resize, std::placeholders::_1,
+                    cv::Size(100, 100), 0, 0, cv::INTER_AREA);
+                GMat tmp1 = cv::gapi::resize(bgr, cv::Size(90, 90));
+                GMat tmp2 = cv::gapi::bitwise_not(cv::gapi::merge3(resize(b), resize(g), resize(r)));
+                GMat out = cv::gapi::add(
+                    cv::gapi::resize(cv::gapi::addC(tmp1, GScalar(10.0)), cv::Size(100, 100)),
+                    tmp2);
+                return cv::GComputation(cv::GIn(in1, in2), cv::GOut(out));
+            },
+            [] (const KernelListener& l) {
+                ASSERT_EQ(2u, l.counts.size());
+                // called in transformed graph:
+                ASSERT_NE(l.counts.cend(), l.counts.find(MyNV12toBGR::id()));
+                ASSERT_EQ(1u, l.counts.at(MyNV12toBGR::id()));
+                ASSERT_NE(l.counts.cend(), l.counts.find(MyInterleavedResize::id()));
+                ASSERT_EQ(1u, l.counts.at(MyInterleavedResize::id()));
+            },
+            cv::compile_args(),
+            cv::compile_args(cv::gapi::kernels<MyNV12toBGRImpl, MyInterleavedResizeImpl,
+                                               ResizeTransform, NV12TransformReversed>()))
     ));
+
+INSTANTIATE_TEST_CASE_P(BasicE2E, PatternMatchingIntegration,
+    Combine(
+        Values([] () {
+                GMat in1, in2;
+                GMat bgr = MyNV12toBGR::on(in1, in2);
+                GMat resized = cv::gapi::resize(bgr, cv::Size(60, 60));
+                GMatP out = GToNCHW::on(resized);
+                return cv::GComputation(cv::GIn(in1, in2), cv::GOut(out));
+        }),
+        Values([] (const KernelListener& l) {
+                ASSERT_EQ(3u, l.counts.size());
+                // called in original graph:
+                ASSERT_NE(l.counts.cend(), l.counts.find(MyNV12toBGR::id()));
+                ASSERT_NE(l.counts.cend(), l.counts.find(GToNCHW::id()));
+                ASSERT_EQ(1u, l.counts.at(MyNV12toBGR::id()));
+                ASSERT_EQ(1u, l.counts.at(GToNCHW::id()));
+                // called in transformed graph:
+                ASSERT_NE(l.counts.cend(), l.counts.find(MyPlanarResize::id()));
+                ASSERT_EQ(1u, l.counts.at(MyPlanarResize::id()));
+            }),
+        Values(cv::compile_args(cv::gapi::kernels<MyNV12toBGRImpl, MyToNCHWImpl>())),
+        Values(  // NB: must work regardless of transformations order
+            cv::compile_args(
+                cv::gapi::kernels<MyPlanarResizeImpl, ChainTransform1, ChainTransform2>()),
+            cv::compile_args(
+                cv::gapi::kernels<ChainTransform2, ChainTransform1, MyPlanarResizeImpl>()))));
 
 // --------------------------------------------------------------------------------------
 // Bad arg integration tests (GCompiler-level)
@@ -1654,8 +1727,7 @@ GAPI_TRANSFORM(EndlessLoopTransform1, <cv::GMat(cv::GMat)>, "test.endless_loop_t
 {
     static cv::GMat pattern(const cv::GMat& in)
     {
-        cv::GMat out = cv::gapi::resize(in, cv::Size(100, 100), 0, 0, cv::INTER_LINEAR);
-        return out;
+        return cv::gapi::resize(in, cv::Size(100, 100), 0, 0, cv::INTER_LINEAR);
     }
 
     static cv::GMat substitute(const cv::GMat& in)

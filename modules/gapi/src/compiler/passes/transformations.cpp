@@ -82,7 +82,7 @@ void checkTransformations(ade::passes::PassContext&,  // FIXME: context is unuse
     {
         const auto& t = std::get<0>(it);
         auto& p = std::get<1>(it);
-        p = std::move(newMinimalisticGraph(t.pattern()));  // cache generated for future re-use
+        p = newMinimalisticGraph(t.pattern());  // cache generated for future re-use
 
         auto tmpSubstitute = newMinimalisticGraph(t.substitute());
         auto matchInSubstitute = findMatches(*p, *tmpSubstitute);
@@ -102,23 +102,31 @@ void applyTransformations(ade::passes::PassContext& ctx,
     // Note: patterns are already generated at this point
     GAPI_Assert(patterns.size() == transforms.size());
 
-    for (auto it : ade::util::zip(ade::util::toRange(transforms),
-                                  ade::util::toRange(patterns)))
+    // transform as long as it is possible. check_transformations step must handle loops and such
+    bool continueTransforming = true;
+    while (continueTransforming)
     {
-        const auto& t = std::get<0>(it);
-        auto& p = std::get<1>(it);
-        GAPI_Assert(nullptr != p);
+        continueTransforming = false;
 
-        // FIXME: verification part must be handled better: separate function?
-        auto tmpSubstitute = newMinimalisticGraph(t.substitute());
-        auto matchInSubstitute = findMatches(*p, *tmpSubstitute);
-        GAPI_Assert(matchInSubstitute.empty());  // it's an error if there's a match
-
-        // Note: applying the same substitution as long as it is possible
-        bool canTransform = true;
-        while (canTransform)
+        // iterate through every transformation and try to transform graph parts
+        for (auto it : ade::util::zip(ade::util::toRange(transforms), ade::util::toRange(patterns)))
         {
-            canTransform = transform(ctx.graph, p, t.substitute());
+            const auto& t = std::get<0>(it);
+            auto& p = std::get<1>(it);
+            GAPI_Assert(nullptr != p);
+
+            // FIXME: verification part must be handled better: separate function?
+            auto tmpSubstitute = newMinimalisticGraph(t.substitute());
+            auto matchInSubstitute = findMatches(*p, *tmpSubstitute);
+            GAPI_Assert(matchInSubstitute.empty());  // it's an error if there's a match
+
+            // Note: applying the same substitution as long as possible
+            bool transformationApplied = true;
+            while (transformationApplied)
+            {
+                transformationApplied = transform(ctx.graph, p, t.substitute());
+                continueTransforming |= transformationApplied;
+            }
         }
     }
 }
