@@ -19,7 +19,7 @@
 namespace cv { namespace gimpl { namespace passes {
 namespace
 {
-std::unique_ptr<ade::Graph> newMinimalisticGraph(const cv::GComputation& c) {
+std::unique_ptr<ade::Graph> makeGraph(const cv::GComputation& c) {
     // Generate ADE graph from expression-based computation
     std::unique_ptr<ade::Graph> pG(new ade::Graph);
     ade::Graph& g = *pG;
@@ -73,21 +73,29 @@ void checkTransformations(ade::passes::PassContext&,  // FIXME: context is unuse
     const auto& transforms = transformations.get_transformations();
     const auto size = transforms.size();
     if (0 == size) return;
+    GAPI_Assert(0 == patterns.size() || size == patterns.size());
     patterns.resize(size);
+    std::vector<std::unique_ptr<ade::Graph>> substitutes(size);
 
-    // FIXME: verify diff. types of endless loops (e.g. pattern in substitute, one transform cancels
+    // FIXME: verify other types of endless loops (e.g. pattern in substitute, one transform cancels
     //        the other)
-    for (auto it : ade::util::zip(ade::util::toRange(transforms),
-                                  ade::util::toRange(patterns)))
-    {
-        const auto& t = std::get<0>(it);
-        auto& p = std::get<1>(it);
-        p = newMinimalisticGraph(t.pattern());  // cache generated for future re-use
 
-        auto tmpSubstitute = newMinimalisticGraph(t.substitute());
-        auto matchInSubstitute = findMatches(*p, *tmpSubstitute);
-        if (!matchInSubstitute.empty()) {
-            throw std::runtime_error("Error: pattern detected inside substitute");
+    // verify there's no patterns in substitutes
+    for (size_t i = 0; i < size; ++i) {
+        auto& p = patterns[i];
+        if (p == nullptr) {
+            p = makeGraph(transforms[i].pattern());
+        }
+        for (size_t j = i; j < size; ++j) {
+            auto& s = substitutes[j];
+            if (s == nullptr) {
+                s = makeGraph(transforms[j].substitute());
+            }
+
+            auto matchInSubstitute = findMatches(*p, *s);
+            if (!matchInSubstitute.empty()) {
+                throw std::runtime_error("Error: pattern detected inside substitute");
+            }
         }
     }
 }
@@ -116,7 +124,7 @@ void applyTransformations(ade::passes::PassContext& ctx,
             GAPI_Assert(nullptr != p);
 
             // FIXME: verification part must be handled better: separate function?
-            auto tmpSubstitute = newMinimalisticGraph(t.substitute());
+            auto tmpSubstitute = makeGraph(t.substitute());
             auto matchInSubstitute = findMatches(*p, *tmpSubstitute);
             GAPI_Assert(matchInSubstitute.empty());  // it's an error if there's a match
 

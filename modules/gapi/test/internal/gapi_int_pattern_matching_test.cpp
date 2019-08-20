@@ -1723,7 +1723,7 @@ TEST_P(PatternMatchingIntegrationEndlessLoops, TestTransformationThrows) {
     EXPECT_THROW(compiler.compile(), std::exception);  //  should throw here
 }
 
-GAPI_TRANSFORM(EndlessLoopTransform1, <cv::GMat(cv::GMat)>, "test.endless_loop_transform1")
+GAPI_TRANSFORM(EndlessLoopTransform1, <cv::GMat(cv::GMat)>, "pattern in substitute")
 {
     static cv::GMat pattern(const cv::GMat& in)
     {
@@ -1741,16 +1741,52 @@ GAPI_TRANSFORM(EndlessLoopTransform1, <cv::GMat(cv::GMat)>, "test.endless_loop_t
     }
 };
 
+GAPI_TRANSFORM(EndlessLoopTransformChain1, <cv::GMat(cv::GMat)>, "Resize -> Custom Resize")
+{
+    static cv::GMat pattern(const cv::GMat& in)
+    {
+        return cv::gapi::resize(in, cv::Size(100, 100));
+    }
+
+    static cv::GMat substitute(const cv::GMat& in)
+    {
+        return MyInterleavedResize::on(in, cv::Size(100, 100), cv::INTER_AREA);
+    }
+};
+GAPI_TRANSFORM(EndlessLoopTransformChain2, <cv::GMat(cv::GMat)>, "Custom Resize -> Resize")
+{
+    static cv::GMat pattern(const cv::GMat& in)
+    {
+        return MyInterleavedResize::on(in, cv::Size(100, 100), cv::INTER_AREA);
+    }
+
+    static cv::GMat substitute(const cv::GMat& in)
+    {
+        return cv::gapi::resize(in, cv::Size(100, 100));
+    }
+};
+
 // FIXME: add more tests for different kinds of loops (when the logic is there)
 INSTANTIATE_TEST_CASE_P(All, PatternMatchingIntegrationEndlessLoops,
-    Values(std::make_tuple(
-                [] () {
-                    GMat in;
-                    GMat tmp = cv::gapi::resize(in, cv::Size(100, 100), 0, 0, cv::INTER_LINEAR);
-                    GMat out = cv::gapi::bitwise_not(tmp);
-                    return cv::GComputation(cv::GIn(in), cv::GOut(out));
-                },
-                cv::compile_args(cv::gapi::kernels<EndlessLoopTransform1>())
-            )));
+    Values(
+        std::make_tuple(
+            [] () {
+                GMat in;
+                GMat tmp = cv::gapi::resize(in, cv::Size(100, 100), 0, 0, cv::INTER_LINEAR);
+                GMat out = cv::gapi::bitwise_not(tmp);
+                return cv::GComputation(cv::GIn(in), cv::GOut(out));
+            },
+            cv::compile_args(cv::gapi::kernels<EndlessLoopTransform1>())
+        ),
+        std::make_tuple(
+            [] () {
+                GMat in;
+                GMat out = cv::gapi::resize(in, cv::Size(100, 100));
+                return cv::GComputation(cv::GIn(in), cv::GOut(out));
+            },
+            cv::compile_args(
+                cv::gapi::kernels<EndlessLoopTransformChain2, EndlessLoopTransformChain1>())
+        )
+    ));
 
 } // namespace opencv_test
