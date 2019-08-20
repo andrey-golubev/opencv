@@ -51,9 +51,6 @@ public:
     void       runPasses(ade::Graph &g);      // Apply all G-API passes on a GModel
     void       compileIslands(ade::Graph &g); // Instantiate GIslandExecutables in GIslandModel
     GCompiled  produceCompiled(GPtr &&pg);    // Produce GCompiled from processed GModel
-
-    bool transform(ade::Graph& main, const cv::GComputation& pattern,
-        const cv::GComputation& substitute);
 };
 
 }}

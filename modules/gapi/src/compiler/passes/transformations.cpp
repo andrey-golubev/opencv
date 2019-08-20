@@ -99,7 +99,8 @@ void applyTransformations(ade::passes::PassContext& ctx,
     const auto& transforms = transformations.get_transformations();
     const auto size = transforms.size();
     if (0 == size) return;
-    GAPI_Assert(patterns.size() == transforms.size());  // Note: patterns are already generated
+    // Note: patterns are already generated at this point
+    GAPI_Assert(patterns.size() == transforms.size());
 
     for (auto it : ade::util::zip(ade::util::toRange(transforms),
                                   ade::util::toRange(patterns)))

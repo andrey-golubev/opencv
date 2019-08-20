@@ -300,35 +300,6 @@ cv::gimpl::GCompiler::GPtr cv::gimpl::GCompiler::generateGraph()
     return pG;
 }
 
-bool cv::gimpl::GCompiler::transform(ade::Graph& main, const cv::GComputation& pattern,
-    const cv::GComputation& substitute) {
-    GModel::Graph gm(main);
-
-    // 1. create standalone pattern graph from GComputation
-    auto patternG = newMinimalisticGraph(pattern);
-
-    // Note: if there are multiple matches, pattern must be applied several times ("outside")
-    auto match1 = findMatches(*patternG, gm);
-    if (!match1.ok()) {
-        return false;
-    }
-
-    // 2. build substitute graph inside the main graph
-    cv::gimpl::GModelBuilder builder(main);
-    const auto& proto_slots = builder.put(substitute.priv().m_ins, substitute.priv().m_outs);
-    Protocol p;
-    std::tie(p.inputs, p.outputs, p.in_nhs, p.out_nhs) = proto_slots;
-
-    // 3. match pattern ins/outs to substitute ins/outs
-    auto match2 = matchPatternToSubstitute(*patternG, main,
-        GModel::Graph(*patternG).metadata().get<Protocol>(), p);
-    GAPI_Assert(match2.partialOk());
-
-    // 4. do substitution
-    performSubstitution(gm, match1, match2);
-    return true;
-}
-
 void cv::gimpl::GCompiler::runPasses(ade::Graph &g)
 {
     m_e.runPasses(g);
