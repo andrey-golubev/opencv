@@ -41,7 +41,8 @@ bool transform(ade::Graph& main, const std::unique_ptr<ade::Graph>& patternG,
     const cv::GComputation& substitute) {
     GModel::Graph gm(main);
 
-    // Note: if there are multiple matches, p must be applied several times ("outside")
+    // Note: if there are multiple matches, p must be applied several times (outside-scope work)
+    // 1. fina pattern in graph
     auto match1 = findMatches(*patternG, gm);
     if (!match1.ok()) {
         return false;
@@ -53,14 +54,15 @@ bool transform(ade::Graph& main, const std::unique_ptr<ade::Graph>& patternG,
     Protocol p;
     std::tie(p.inputs, p.outputs, p.in_nhs, p.out_nhs) = proto_slots;
 
-    // 3. match p ins/outs to substitute ins/outs
+    // 3. match pattern ins/outs to substitute ins/outs
     auto match2 = matchPatternToSubstitute(*patternG, main,
         GModel::Graph(*patternG).metadata().get<Protocol>(), p);
+
     // FIXME: from the state perspective it's better to validate matchings prior to applying the
     //        transformations: graph can already be (partially) transformed
     GAPI_Assert(match2.partialOk());
 
-    // 4. do substitution
+    // 4. make substitution
     performSubstitution(gm, match1, match2);
     return true;
 }
@@ -110,7 +112,8 @@ void applyTransformations(ade::passes::PassContext& ctx,
     // Note: patterns are already generated at this point
     GAPI_Assert(patterns.size() == transforms.size());
 
-    // transform as long as it is possible. check_transformations step must handle loops and such
+    // transform as long as it is possible
+    // Note: check_transformations pass must handle endless loops and such
     bool continueTransforming = true;
     while (continueTransforming)
     {
@@ -120,19 +123,17 @@ void applyTransformations(ade::passes::PassContext& ctx,
         for (auto it : ade::util::zip(ade::util::toRange(transforms), ade::util::toRange(patterns)))
         {
             const auto& t = std::get<0>(it);
-            auto& p = std::get<1>(it);
+            auto& p = std::get<1>(it);  // Note: using pre-created graphs
             GAPI_Assert(nullptr != p);
-
-            // FIXME: verification part must be handled better: separate function?
-            auto tmpSubstitute = makeGraph(t.substitute());
-            auto matchInSubstitute = findMatches(*p, *tmpSubstitute);
-            GAPI_Assert(matchInSubstitute.empty());  // it's an error if there's a match
 
             // Note: applying the same substitution as long as possible
             bool transformationApplied = true;
             while (transformationApplied)
             {
                 transformationApplied = transform(ctx.graph, p, t.substitute());
+
+                // if at least one transformation happend, it is possible that other transforms will
+                // be applied in the next "round"
                 continueTransforming |= transformationApplied;
             }
         }

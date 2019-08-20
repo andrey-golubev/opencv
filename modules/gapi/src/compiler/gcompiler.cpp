@@ -30,8 +30,6 @@
 #include "compiler/gcompiled_priv.hpp"
 #include "compiler/passes/passes.hpp"
 
-#include "compiler/passes/pattern_matching.hpp"
-
 #include "executor/gexecutor.hpp"
 #include "backends/common/gbackend.hpp"
 

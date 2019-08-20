@@ -1740,7 +1740,6 @@ GAPI_TRANSFORM(EndlessLoopTransform1, <cv::GMat(cv::GMat)>, "pattern in substitu
         return out;
     }
 };
-
 GAPI_TRANSFORM(EndlessLoopTransformChain1, <cv::GMat(cv::GMat)>, "Resize -> Custom Resize")
 {
     static cv::GMat pattern(const cv::GMat& in)

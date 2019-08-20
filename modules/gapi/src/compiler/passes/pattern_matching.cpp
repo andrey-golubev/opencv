@@ -535,6 +535,7 @@ cv::gimpl::findMatches(const cv::gimpl::GModel::Graph& patternGraph,
 
                 auto patternOutputPort =
                         patternGraph.metadata(patternOutEdge).get<cv::gimpl::Output>().port;
+
                 auto matchedIt = std::find_if(testOutputEdges.begin(), testOutputEdges.end(),
                     [&](const ade::EdgeHandle& testOutEdge) -> bool {
                     auto testOutputPort =

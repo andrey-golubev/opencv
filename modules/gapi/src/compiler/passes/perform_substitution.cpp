@@ -6,9 +6,6 @@
 
 #include "pattern_matching.hpp"
 
-#include <list>
-#include <algorithm>
-
 namespace cv { namespace gimpl {
 namespace {
 using Graph = GModel::Graph;
@@ -17,7 +14,7 @@ template<typename It, typename Callable>
 void erase(Graph& g, It first, It last, Callable get) {
     for (; first != last; ++first) {
         ade::NodeHandle node = get(first);
-        if (node == nullptr) continue;  // NB: some nodes might already be erased
+        if (node == nullptr) continue;  // some nodes might already be erased
         g.erase(node);
     }
 }
@@ -69,12 +66,6 @@ void performSubstitution(Graph& graph,
     // erase output data nodes of __substitute__
     erase(graph, patternToSubstitute.outputDataNodes.begin(),
         patternToSubstitute.outputDataNodes.end(), get_from_pair);
-
-    // FIXME: workaround??
-    // erase Island information
-    for (auto node : graph.nodes()) {
-        graph.metadata(node).erase<Island>();
-    }
 }
 
 }  // namespace gimpl

@@ -13,11 +13,8 @@
 #include <opencv2/gapi/gkernel.hpp>
 #include <opencv2/gapi/infer.hpp>
 #include <opencv2/gapi/gcomputation.hpp>
-#include <opencv2/gapi/util/optional.hpp>
 
 #include <ade/execution_engine/execution_engine.hpp>
-
-#include "gmodel.hpp"
 
 namespace cv { namespace gimpl {
 
