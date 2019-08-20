@@ -9,8 +9,6 @@
 #include <list>
 #include <algorithm>
 
-#define UNUSED(x) (void)x
-
 namespace cv { namespace gimpl {
 namespace {
 using Graph = GModel::Graph;

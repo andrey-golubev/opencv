@@ -8,8 +8,6 @@
 
 #include <ade/util/zip_range.hpp>
 
-#define UNUSED(x) (void)x
-
 namespace cv { namespace gimpl {
 
 namespace {
@@ -43,6 +41,7 @@ bool compareDataNodes(const Metadata& firstMeta,
     return true;
 }
 
+// Returns a matched pairs of {pattern node, substitute node}
 SubgraphMatch::M matchDataNodes(const Graph& pattern, const Graph& substitute,
     const std::vector<ade::NodeHandle>& patternNodes,
     std::vector<ade::NodeHandle> substituteNodes) {

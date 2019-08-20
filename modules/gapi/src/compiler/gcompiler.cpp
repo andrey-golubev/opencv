@@ -104,25 +104,6 @@ namespace
         }
         return result;
     }
-
-    std::unique_ptr<ade::Graph> newMinimalisticGraph(const cv::GComputation& c) {
-        // Generate ADE graph from expression-based computation
-        std::unique_ptr<ade::Graph> pG(new ade::Graph);
-        ade::Graph& g = *pG;
-
-        cv::gimpl::GModel::Graph gm(g);
-        cv::gimpl::GModel::init(gm);
-        cv::gimpl::GModelBuilder builder(g);
-        auto proto_slots = builder.put(c.priv().m_ins, c.priv().m_outs);
-
-        // Store Computation's protocol in metadata
-        cv::gimpl::Protocol p;
-        std::tie(p.inputs, p.outputs, p.in_nhs, p.out_nhs) = proto_slots;
-        gm.metadata().set(p);
-
-        return pG;
-    }
-
 } // anonymous namespace
 
 
