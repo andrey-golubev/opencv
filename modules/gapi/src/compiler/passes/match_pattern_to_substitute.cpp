@@ -22,7 +22,8 @@ using VisitedMatchings = std::list<std::pair<ade::NodeHandle, ade::NodeHandle>>;
 // @param firstMeta - metadata of first
 // @param secondMeta - metadata of second
 bool compareDataNodes(const Metadata& firstMeta,
-                      const Metadata& secondMeta) {
+                      const Metadata& secondMeta)
+{
     GAPI_Assert(firstMeta.get<NodeType>().t == NodeType::DATA);
     GAPI_Assert(firstMeta.get<NodeType>().t == secondMeta.get<NodeType>().t);
 
@@ -41,10 +42,12 @@ bool compareDataNodes(const Metadata& firstMeta,
     return true;
 }
 
-// Returns a matched pairs of {pattern node, substitute node}
-SubgraphMatch::M matchDataNodes(const Graph& pattern, const Graph& substitute,
-    const std::vector<ade::NodeHandle>& patternNodes,
-    std::vector<ade::NodeHandle> substituteNodes) {
+// Returns matched pairs of {pattern node, substitute node}
+SubgraphMatch::M matchDataNodes(const Graph& pattern,
+                                const Graph& substitute,
+                                const std::vector<ade::NodeHandle>& patternNodes,
+                                std::vector<ade::NodeHandle> substituteNodes)
+{
     SubgraphMatch::M matched;
     for (auto it : ade::util::zip(patternNodes, substituteNodes)) {
         const auto& pNode = std::get<0>(it);
@@ -59,9 +62,10 @@ SubgraphMatch::M matchDataNodes(const Graph& pattern, const Graph& substitute,
 }  // anonymous namespace
 
 SubgraphMatch matchPatternToSubstitute(const cv::gimpl::GModel::Graph& pattern,
-    const cv::gimpl::GModel::Graph& substitute,
-    const cv::gimpl::Protocol& patternP,
-    const cv::gimpl::Protocol& substituteP) {
+                                       const cv::gimpl::GModel::Graph& substitute,
+                                       const cv::gimpl::Protocol& patternP,
+                                       const cv::gimpl::Protocol& substituteP)
+{
     //---------------------------------------------------------------
     // Match data nodes which start and end our pattern and substitute
     const auto& patternDataInputs = patternP.in_nhs;

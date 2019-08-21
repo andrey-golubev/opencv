@@ -16,11 +16,14 @@
 #include "compiler/passes/passes.hpp"
 #include "compiler/passes/pattern_matching.hpp"
 
+#include <sstream>
+
 namespace cv { namespace gimpl { namespace passes {
 namespace
 {
-std::unique_ptr<ade::Graph> makeGraph(const cv::GComputation& c) {
-    // Generate ADE graph from expression-based computation
+// Generates ADE graph from expression-based computation
+std::unique_ptr<ade::Graph> makeGraph(const cv::GComputation& c)
+{
     std::unique_ptr<ade::Graph> pG(new ade::Graph);
     ade::Graph& g = *pG;
 
@@ -37,8 +40,10 @@ std::unique_ptr<ade::Graph> makeGraph(const cv::GComputation& c) {
     return pG;
 }
 
-bool transform(ade::Graph& main, const std::unique_ptr<ade::Graph>& patternG,
-    const cv::GComputation& substitute) {
+bool tryToSubstitute(ade::Graph& main,
+                     const std::unique_ptr<ade::Graph>& patternG,
+                     const cv::GComputation& substitute)
+{
     GModel::Graph gm(main);
 
     // Note: if there are multiple matches, p must be applied several times (outside-scope work)
@@ -57,10 +62,7 @@ bool transform(ade::Graph& main, const std::unique_ptr<ade::Graph>& patternG,
     // 3. match pattern ins/outs to substitute ins/outs
     auto match2 = matchPatternToSubstitute(*patternG, main,
         GModel::Graph(*patternG).metadata().get<Protocol>(), p);
-
-    // FIXME: from the state perspective it's better to validate matchings prior to applying the
-    //        transformations: graph can already be (partially) transformed
-    GAPI_Assert(match2.partialOk());
+    GAPI_Assert(match2.partialOk());  // this should never happen in theory
 
     // 4. make substitution
     performSubstitution(gm, match1, match2);
@@ -69,43 +71,52 @@ bool transform(ade::Graph& main, const std::unique_ptr<ade::Graph>& patternG,
 }  // anonymous namespace
 
 void checkTransformations(ade::passes::PassContext&,  // FIXME: context is unused here
-    const gapi::GKernelPackage& transformations,
-    std::vector<std::unique_ptr<ade::Graph>>& patterns)
+                          const gapi::GKernelPackage& pkg,
+                          std::vector<std::unique_ptr<ade::Graph>>& patterns)
 {
-    const auto& transforms = transformations.get_transformations();
+    const auto& transforms = pkg.get_transformations();
     const auto size = transforms.size();
-    if (0 == size) return;
-    GAPI_Assert(0 == patterns.size() || size == patterns.size());
+    if (0u == size) return;
+    GAPI_Assert(0u == patterns.size() || size == patterns.size());
     patterns.resize(size);
     std::vector<std::unique_ptr<ade::Graph>> substitutes(size);
 
-    // FIXME: verify other types of endless loops
+    // 1. pre-generate all required graphs
+    for (auto it : ade::util::zip(ade::util::toRange(transforms),
+                                  ade::util::toRange(patterns),
+                                  ade::util::toRange(substitutes))) {
+        const auto& t = std::get<0>(it);
+        auto& p = std::get<1>(it);
+        auto& s = std::get<2>(it);
 
-    // verify there are no patterns in substitutes
+        p = makeGraph(t.pattern());  // NB: these patterns are re-used in apply_transformation pass
+        s = makeGraph(t.substitute());
+    }
+
+    // FIXME: verify other types of endless loops - are there any other, though?
+
+    // 2. verify there are no patterns in substitutes
     for (size_t i = 0; i < size; ++i) {
         auto& p = patterns[i];
-        if (p == nullptr) {
-            p = makeGraph(transforms[i].pattern());
-        }
         for (size_t j = i; j < size; ++j) {
             auto& s = substitutes[j];
-            if (s == nullptr) {
-                s = makeGraph(transforms[j].substitute());
-            }
 
             auto matchInSubstitute = findMatches(*p, *s);
             if (!matchInSubstitute.empty()) {
-                throw std::runtime_error("Error: pattern detected inside substitute");
+                std::stringstream ss;
+                ss << "Error: pattern (from transformation #" << i << ") detected inside substitute"
+                      " (from transformation #" << j << ")";
+                throw std::runtime_error(ss.str());
             }
         }
     }
 }
 
 void applyTransformations(ade::passes::PassContext& ctx,
-    const gapi::GKernelPackage& transformations,
-    const std::vector<std::unique_ptr<ade::Graph>>& patterns)
+                          const gapi::GKernelPackage& pkg,
+                          const std::vector<std::unique_ptr<ade::Graph>>& patterns)
 {
-    const auto& transforms = transformations.get_transformations();
+    const auto& transforms = pkg.get_transformations();
     const auto size = transforms.size();
     if (0 == size) return;
     // Note: patterns are already generated at this point
@@ -113,10 +124,10 @@ void applyTransformations(ade::passes::PassContext& ctx,
 
     // transform as long as it is possible
     // Note: check_transformations pass must handle endless loops and such
-    bool continueTransforming = true;
-    while (continueTransforming)
+    bool canTransform = true;
+    while (canTransform)
     {
-        continueTransforming = false;
+        canTransform = false;
 
         // iterate through every transformation and try to transform graph parts
         for (auto it : ade::util::zip(ade::util::toRange(transforms), ade::util::toRange(patterns)))
@@ -125,16 +136,9 @@ void applyTransformations(ade::passes::PassContext& ctx,
             auto& p = std::get<1>(it);  // Note: using pre-created graphs
             GAPI_Assert(nullptr != p);
 
-            // Note: applying the same substitution as long as possible
-            bool transformationApplied = true;
-            while (transformationApplied)
-            {
-                transformationApplied = transform(ctx.graph, p, t.substitute());
-
-                // if at least one transformation happend, it is possible that other transforms will
-                // be applied in the next "round"
-                continueTransforming |= transformationApplied;
-            }
+            // if at least one transformation happend, it is possible that other transformations
+            // will be applied in the next "round"
+            canTransform |= tryToSubstitute(ctx.graph, p, t.substitute());
         }
     }
 }

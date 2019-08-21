@@ -10,10 +10,11 @@ namespace cv { namespace gimpl {
 namespace {
 using Graph = GModel::Graph;
 
-template<typename It, typename Callable>
-void erase(Graph& g, It first, It last, Callable get) {
-    for (; first != last; ++first) {
-        ade::NodeHandle node = get(first);
+template<typename Container, typename Callable>
+void erase(Graph& g, const Container& c, Callable getNh)
+{
+    for (auto first = c.begin(); first != c.end(); ++first) {
+        ade::NodeHandle node = getNh(first);
         if (node == nullptr) continue;  // some nodes might already be erased
         g.erase(node);
     }
@@ -21,7 +22,9 @@ void erase(Graph& g, It first, It last, Callable get) {
 }  // anonymous namespace
 
 void performSubstitution(Graph& graph,
-    const SubgraphMatch& patternToGraph, const SubgraphMatch& patternToSubstitute) {
+                         const SubgraphMatch& patternToGraph,
+                         const SubgraphMatch& patternToSubstitute)
+{
     // substitute input nodes
     for (const auto& inputNodePair : patternToGraph.inputDataNodes) {
         // Note: we don't replace input DATA nodes here, only redirect their output edges
@@ -49,24 +52,19 @@ void performSubstitution(Graph& graph,
     const auto get_from_pair = [] (SubgraphMatch::M::const_iterator it) { return it->second; };
 
     // erase input data nodes of __substitute__
-    erase(graph, patternToSubstitute.inputDataNodes.begin(),
-        patternToSubstitute.inputDataNodes.end(), get_from_pair);
+    erase(graph, patternToSubstitute.inputDataNodes, get_from_pair);
 
     // erase old start OP nodes of __main graph__
-    erase(graph, patternToGraph.startOpNodes.begin(),
-        patternToGraph.startOpNodes.end(), get_from_pair);
+    erase(graph, patternToGraph.startOpNodes, get_from_pair);
 
     // erase old internal nodes of __main graph__
-    erase(graph, patternToGraph.internalLayers.begin(),
-        patternToGraph.internalLayers.end(), get_from_node);
+    erase(graph, patternToGraph.internalLayers, get_from_node);
 
     // erase old finish OP nodes of __main graph__
-    erase(graph, patternToGraph.finishOpNodes.begin(),
-        patternToGraph.finishOpNodes.end(), get_from_pair);
+    erase(graph, patternToGraph.finishOpNodes, get_from_pair);
 
     // erase output data nodes of __substitute__
-    erase(graph, patternToSubstitute.outputDataNodes.begin(),
-        patternToSubstitute.outputDataNodes.end(), get_from_pair);
+    erase(graph, patternToSubstitute.outputDataNodes, get_from_pair);
 }
 
 }  // namespace gimpl

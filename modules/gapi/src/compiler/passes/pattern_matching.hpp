@@ -104,13 +104,13 @@ namespace gimpl {
                                            const cv::gimpl::GModel::Graph& compGraph);
 
     GAPI_EXPORTS SubgraphMatch matchPatternToSubstitute(const cv::gimpl::GModel::Graph& pattern,
-        const cv::gimpl::GModel::Graph& substitute,
-        const cv::gimpl::Protocol& patternP,
-        const cv::gimpl::Protocol& substituteP);
+                                                        const cv::gimpl::GModel::Graph& substitute,
+                                                        const cv::gimpl::Protocol& patternP,
+                                                        const cv::gimpl::Protocol& substituteP);
 
     GAPI_EXPORTS void performSubstitution(cv::gimpl::GModel::Graph& graph,
-        const cv::gimpl::SubgraphMatch& patternToGraph,
-        const cv::gimpl::SubgraphMatch& patternToSubstitute);
+                                          const cv::gimpl::SubgraphMatch& patternToGraph,
+                                          const cv::gimpl::SubgraphMatch& patternToSubstitute);
 
 } //namespace gimpl
 } //namespace cv

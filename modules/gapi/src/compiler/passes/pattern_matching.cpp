@@ -176,12 +176,11 @@ std::size_t labelOf (const ade::NodeHandle& node, // reader node
 
 // FIXME: it seems safe for now to check whether nh is INPUT or OUTPUT* through in/out edges.
 //        nonetheless, it's probably better to check via Data::Storage. current approach is faster,
-//        though
-// * OUTPUT must be explicitly checked via storage due to __unused__ pseudo-out nodes in graph
 inline bool IS_STARTPOINT(const ade::NodeHandle& nh) {
     return nh->inEdges().empty();
 }
 
+// * OUTPUT must be explicitly checked via storage due to __unused__ pseudo-out nodes in graph
 inline bool IS_ENDPOINT(const cv::gimpl::GModel::Graph& graph, const ade::NodeHandle& nh) {
     bool is_endpoint = nh->outEdges().empty();
     const auto& meta = graph.metadata(nh);
