@@ -37,6 +37,7 @@ void performSubstitution(Graph& graph,
         const auto& patternDataNode = outputNodePair.first;
         const auto& graphDataNode = outputNodePair.second;
         const auto& substituteDataNode = patternToSubstitute.outputDataNodes.at(patternDataNode);
+        // delete existing edges (otherwise we cannot redirect)
         for (auto e : graphDataNode->inEdges()) {
             graph.erase(e);
         }

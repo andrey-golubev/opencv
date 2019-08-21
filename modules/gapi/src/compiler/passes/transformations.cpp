@@ -79,10 +79,9 @@ void checkTransformations(ade::passes::PassContext&,  // FIXME: context is unuse
     patterns.resize(size);
     std::vector<std::unique_ptr<ade::Graph>> substitutes(size);
 
-    // FIXME: verify other types of endless loops (e.g. pattern in substitute, one transform cancels
-    //        the other)
+    // FIXME: verify other types of endless loops
 
-    // verify there's no patterns in substitutes
+    // verify there are no patterns in substitutes
     for (size_t i = 0; i < size; ++i) {
         auto& p = patterns[i];
         if (p == nullptr) {

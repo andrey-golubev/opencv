@@ -1470,7 +1470,7 @@ using Verifier = std::function<void(KernelListener)>;
 
 struct PatternMatchingIntegration :
     TestWithParam<std::tuple<CompCreator, Verifier, cv::GCompileArgs, cv::GCompileArgs>> {};
-TEST_P(PatternMatchingIntegration, TestApplyTransformation) {
+TEST_P(PatternMatchingIntegration, TestTransformationApplied) {
     cv::Size in_sz(640, 480);
     cv::Mat y(in_sz, CV_8UC1), uv(cv::Size(in_sz.width / 2, in_sz.height / 2), CV_8UC2);
     cv::randu(y, cv::Scalar::all(0), cv::Scalar::all(100));
@@ -1535,7 +1535,7 @@ GAPI_OCV_KERNEL(MyPlanarResizeImpl, MyPlanarResize) {
         }
     }
 };
-G_TYPED_KERNEL(MyInterleavedResize, <GMat(GMat, Size, int)>, "test.my_planar_resize") {
+G_TYPED_KERNEL(MyInterleavedResize, <GMat(GMat, Size, int)>, "test.my_interleaved_resize") {
     static GMatDesc outMeta(GMatDesc in, Size sz, int interp) {
         return cv::gapi::core::GResize::outMeta(in, sz, 0.0, 0.0, interp);
     }
@@ -1561,6 +1561,22 @@ GAPI_OCV_KERNEL(MyToNCHWImpl, GToNCHW) {
             auto out_plane = out(cv::Rect(0, i*h, w, h));
             in_plane.copyTo(out_plane);
         }
+    }
+};
+using GMat4 = std::tuple<GMat, GMat, GMat, GMat>;
+G_TYPED_KERNEL_M(MySplit4, <GMat4(GMat)>, "test.my_split4") {
+    static std::tuple<GMatDesc, GMatDesc, GMatDesc, GMatDesc> outMeta(GMatDesc in) {
+        const auto out_depth = in.depth;
+        const auto out_desc = in.withType(out_depth, 1);
+        return std::make_tuple(out_desc, out_desc, out_desc, out_desc);
+    }
+};
+GAPI_OCV_KERNEL(MySplit4Impl, MySplit4) {
+    static void run(const cv::Mat& in, cv::Mat& out1, cv::Mat& out2, cv::Mat& out3, cv::Mat& out4)
+    {
+        getListener().counts[MySplit4::id()]++;
+        cv::Mat outs[] = { out1, out2, out3, out4 };
+        cv::split(in, outs);
     }
 };
 
@@ -1632,6 +1648,49 @@ GAPI_TRANSFORM(ChainTransform2, <GMatP(GMat, GMat)>, "NV12toBGR + toNCHW -> NV12
         return cv::gapi::NV12toBGRp(y, uv);
     }
 };
+GAPI_TRANSFORM(Split4Transform, <GMat4(GMat)>, "Split4 -> Custom Split4")
+{
+    static GMat4 pattern(const GMat& in)
+    {
+        return cv::gapi::split4(in);
+    }
+
+    static GMat4 substitute(const GMat& in)
+    {
+        return MySplit4::on(in);
+    }
+};
+GAPI_TRANSFORM(Split4Merge3Transform, <GMat(GMat)>, "Split4 + Merge3 -> Custom Split4 + Merge3")
+{
+    static GMat pattern(const GMat& in)
+    {
+        GMat tmp1, tmp2, tmp3, unused;
+        std::tie(tmp1, tmp2, tmp3, unused) = cv::gapi::split4(in);
+        return cv::gapi::merge3(tmp1, tmp2, tmp3);
+    }
+
+    static GMat substitute(const GMat& in)
+    {
+        GMat tmp1, tmp2, tmp3, unused;
+        std::tie(tmp1, tmp2, tmp3, unused) = MySplit4::on(in);
+        return cv::gapi::merge3(tmp1, tmp2, tmp3);
+    }
+};
+GAPI_TRANSFORM(Merge4Split4Transform, <GMat4(GMat, GMat, GMat, GMat)>,
+    "Merge4 + Split4 -> Merge4 + Custom Split4")
+{
+    static GMat4 pattern(const GMat& in1, const GMat& in2, const GMat& in3,
+        const GMat& in4)
+    {
+        return cv::gapi::split4(cv::gapi::merge4(in1, in2, in3, in4));
+    }
+
+    static GMat4 substitute(const GMat& in1, const GMat& in2, const GMat& in3,
+        const GMat& in4)
+    {
+        return MySplit4::on(cv::gapi::merge4(in1, in2, in3, in4));
+    }
+};
 
 INSTANTIATE_TEST_CASE_P(Everything, PatternMatchingIntegration,
     Values(
@@ -1681,29 +1740,57 @@ INSTANTIATE_TEST_CASE_P(Everything, PatternMatchingIntegration,
 INSTANTIATE_TEST_CASE_P(BasicE2E, PatternMatchingIntegration,
     Combine(
         Values([] () {
-                GMat in1, in2;
-                GMat bgr = MyNV12toBGR::on(in1, in2);
-                GMat resized = cv::gapi::resize(bgr, cv::Size(60, 60));
-                GMatP out = GToNCHW::on(resized);
-                return cv::GComputation(cv::GIn(in1, in2), cv::GOut(out));
+            GMat in1, in2;
+            GMat bgr = MyNV12toBGR::on(in1, in2);
+            GMat resized = cv::gapi::resize(bgr, cv::Size(60, 60));
+            GMatP out = GToNCHW::on(resized);
+            return cv::GComputation(cv::GIn(in1, in2), cv::GOut(out));
         }),
         Values([] (const KernelListener& l) {
-                ASSERT_EQ(3u, l.counts.size());
-                // called in original graph:
-                ASSERT_NE(l.counts.cend(), l.counts.find(MyNV12toBGR::id()));
-                ASSERT_NE(l.counts.cend(), l.counts.find(GToNCHW::id()));
-                ASSERT_EQ(1u, l.counts.at(MyNV12toBGR::id()));
-                ASSERT_EQ(1u, l.counts.at(GToNCHW::id()));
-                // called in transformed graph:
-                ASSERT_NE(l.counts.cend(), l.counts.find(MyPlanarResize::id()));
-                ASSERT_EQ(1u, l.counts.at(MyPlanarResize::id()));
-            }),
+            ASSERT_EQ(3u, l.counts.size());
+            // called in original graph:
+            ASSERT_NE(l.counts.cend(), l.counts.find(MyNV12toBGR::id()));
+            ASSERT_NE(l.counts.cend(), l.counts.find(GToNCHW::id()));
+            ASSERT_EQ(1u, l.counts.at(MyNV12toBGR::id()));
+            ASSERT_EQ(1u, l.counts.at(GToNCHW::id()));
+            // called in transformed graph:
+            ASSERT_NE(l.counts.cend(), l.counts.find(MyPlanarResize::id()));
+            ASSERT_EQ(1u, l.counts.at(MyPlanarResize::id()));
+        }),
         Values(cv::compile_args(cv::gapi::kernels<MyNV12toBGRImpl, MyToNCHWImpl>())),
         Values(  // NB: must work regardless of transformations order
             cv::compile_args(
                 cv::gapi::kernels<MyPlanarResizeImpl, ChainTransform1, ChainTransform2>()),
             cv::compile_args(
                 cv::gapi::kernels<ChainTransform2, ChainTransform1, MyPlanarResizeImpl>()))));
+
+INSTANTIATE_TEST_CASE_P(UnusedNodes, PatternMatchingIntegration,
+    Combine(
+        Values([] () {
+            GMat in1, in2;
+            GMat bgr = cv::gapi::NV12toBGR(in1, in2);
+            GMat b1, g1, r1;
+            std::tie(b1, g1, r1) = cv::gapi::split3(bgr);
+            // FIXME: easier way to call split4??
+            GMat merged4 = cv::gapi::merge4(b1, g1, r1, b1);
+            GMat b2, g2, r2, unused;
+            std::tie(b2, g2, r2, unused) = cv::gapi::split4(merged4);
+            GMat out = cv::gapi::merge3(b2, g2, r2);
+            return cv::GComputation(cv::GIn(in1, in2), cv::GOut(out));
+        }),
+        Values([] (const KernelListener& l) {
+            ASSERT_EQ(1u, l.counts.size());
+            // called in transformed graph:
+            ASSERT_NE(l.counts.cend(), l.counts.find(MySplit4::id()));
+            ASSERT_EQ(1u, l.counts.at(MySplit4::id()));
+        }),
+        Values(cv::compile_args()),
+        Values(
+            cv::compile_args(cv::gapi::kernels<MySplit4Impl, Split4Transform>()),
+            // FIXME: fix the following case:
+            // cv::compile_args(cv::gapi::kernels<MySplit4Impl, Split4Merge3Transform>()),
+            cv::compile_args(cv::gapi::kernels<MySplit4Impl, Merge4Split4Transform>())
+        )));
 
 // --------------------------------------------------------------------------------------
 // Bad arg integration tests (GCompiler-level)
