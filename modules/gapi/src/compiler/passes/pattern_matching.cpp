@@ -54,8 +54,14 @@ bool compareDataNodes(const ade::NodeHandle& first, const std::vector<std::size_
                                "shall be NodeType::DATA!");
     }
 
-    if (firstMeta.get<cv::gimpl::Data>().shape !=
-           secondMeta.get<cv::gimpl::Data>().shape) {
+    const auto& firstData = firstMeta.get<cv::gimpl::Data>();
+    const auto& secondData = secondMeta.get<cv::gimpl::Data>();
+
+    if (firstData.shape != secondData.shape) {
+        return false;
+    }
+
+    if (firstData.storage != secondData.storage) {
         return false;
     }
 
@@ -69,9 +75,6 @@ bool compareDataNodes(const ade::NodeHandle& first, const std::vector<std::size_
     if (firstOutputEdges.size() != secondOutputEdges.size()) {
         return false;
     }
-
-    // FIXME: Because of new changes which introduce existence of unused DATA nodes
-    // check that first and second nodes have the same type of DATA::Storage.
 
     return true;
 };
@@ -171,14 +174,21 @@ std::size_t labelOf (const ade::NodeHandle& node, // reader node
     }
 };
 
-inline bool IS_STARTPOINT(const ade::NodeHandle& nh){
+// FIXME: it seems safe for now to check whether nh is INPUT or OUTPUT* through in/out edges.
+//        nonetheless, it's probably better to check via Data::Storage. current approach is faster,
+//        though
+// * OUTPUT must be explicitly checked via storage due to __unused__ pseudo-out nodes in graph
+inline bool IS_STARTPOINT(const ade::NodeHandle& nh) {
     return nh->inEdges().empty();
 }
 
-inline bool IS_ENDPOINT(const ade::NodeHandle& nh){
-    // FIXME: Because of new changes which introduce existence of unused DATA nodes
-    // Try to rely on the nh Data::Storage::OUTPUT
-    return nh->outEdges().empty();
+inline bool IS_ENDPOINT(const cv::gimpl::GModel::Graph& graph, const ade::NodeHandle& nh) {
+    bool is_endpoint = nh->outEdges().empty();
+    const auto& meta = graph.metadata(nh);
+    if (meta.get<cv::gimpl::NodeType>().t == cv::gimpl::NodeType::DATA) {
+        is_endpoint &= (meta.get<cv::gimpl::Data>().storage == cv::gimpl::Data::Storage::OUTPUT);
+    }
+    return is_endpoint;
 }
 }
 
@@ -330,7 +340,7 @@ cv::gimpl::findMatches(const cv::gimpl::GModel::Graph& patternGraph,
 
                 for (const auto& patternOutputEdge : patternOutputEdges) {
                     const auto& dstNh = patternOutputEdge->dstNode();
-                    if (!IS_ENDPOINT(dstNh)) {
+                    if (!IS_ENDPOINT(patternGraph, dstNh)) {
                         //Assuming that there is no case for the op node without output data nodes.
                         patternOutputNodesLabeled[dstNh].
                                 push_back(labelOf(dstNh, patternOutputEdge, patternGraph));
@@ -529,7 +539,7 @@ cv::gimpl::findMatches(const cv::gimpl::GModel::Graph& patternGraph,
                 // Not all end OP nodes are located in the ending of the pattern graph
                 // End OP node may have one output DATA node as an Protocol OUT node and other
                 // output DATA nodes as input for another operations
-                if (!IS_ENDPOINT(patternOutEdge->dstNode())) {
+                if (!IS_ENDPOINT(patternGraph, patternOutEdge->dstNode())) {
                     continue;
                 }
 

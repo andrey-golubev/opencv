@@ -1787,8 +1787,7 @@ INSTANTIATE_TEST_CASE_P(UnusedNodes, PatternMatchingIntegration,
         Values(cv::compile_args()),
         Values(
             cv::compile_args(cv::gapi::kernels<MySplit4Impl, Split4Transform>()),
-            // FIXME: fix the following case:
-            // cv::compile_args(cv::gapi::kernels<MySplit4Impl, Split4Merge3Transform>()),
+            cv::compile_args(cv::gapi::kernels<MySplit4Impl, Split4Merge3Transform>()),
             cv::compile_args(cv::gapi::kernels<MySplit4Impl, Merge4Split4Transform>())
         )));
 
