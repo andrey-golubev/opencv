@@ -175,7 +175,7 @@ std::size_t labelOf (const ade::NodeHandle& node, // reader node
 };
 
 // FIXME: it seems safe for now to check whether nh is INPUT or OUTPUT* through in/out edges.
-//        nonetheless, it's probably better to check via Data::Storage. current approach is faster,
+//        nonetheless, it's probably better to check via Storage, but current approach is faster
 inline bool IS_STARTPOINT(const ade::NodeHandle& nh) {
     return nh->inEdges().empty();
 }
@@ -518,7 +518,7 @@ cv::gimpl::findMatches(const cv::gimpl::GModel::Graph& patternGraph,
         // Create vector with the correctly ordered IN data nodes in the test subgraph
         std::vector<ade::NodeHandle> inputTestDataNodes;
         for (const auto& patternInNode : patternInputDataNodes) {
-            inputTestDataNodes.push_back(inputApiMatch[patternInNode]);
+            inputTestDataNodes.push_back(inputApiMatch.at(patternInNode));
         }
 
         // Traversing current result for ending OPs

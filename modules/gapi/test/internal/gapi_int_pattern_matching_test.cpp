@@ -1468,40 +1468,8 @@ using CompileArgsCreator = std::function<cv::GCompileArgs()>;
 using Verifier = std::function<void(KernelListener)>;
 }  // anonymous namespace
 
-struct PatternMatchingIntegration :
-    TestWithParam<std::tuple<CompCreator, Verifier, cv::GCompileArgs, cv::GCompileArgs>> {};
-TEST_P(PatternMatchingIntegration, TestTransformationApplied) {
-    cv::Size in_sz(640, 480);
-    cv::Mat y(in_sz, CV_8UC1), uv(cv::Size(in_sz.width / 2, in_sz.height / 2), CV_8UC2);
-    cv::randu(y, cv::Scalar::all(0), cv::Scalar::all(100));
-    cv::randu(y, cv::Scalar::all(100), cv::Scalar::all(200));
-    cv::Mat orig_output, transformed_output;
+// Custom kernels && transformations below:
 
-    auto orig_args = std::get<2>(GetParam());  // returns compile args for original graph
-    auto transform_args = std::get<3>(GetParam());  // returns compile args with transformations
-
-    auto& listener = getListener();
-    listener.counts.clear();  // clear counters before testing
-
-    {
-        // Run original graph
-        auto mainC = std::get<0>(GetParam())();
-        mainC.apply(cv::gin(y, uv), cv::gout(orig_output), std::move(orig_args));
-    }
-
-    // Generate transformed graph (passing transformations via compile args)
-    auto mainC = std::get<0>(GetParam())();  // get new copy with new Priv
-    mainC.apply(cv::gin(y, uv), cv::gout(transformed_output), std::move(transform_args));
-
-    // Compare
-    ASSERT_TRUE(AbsExact()(orig_output, transformed_output));
-
-    // Custom verification via listener
-    auto verify = std::get<1>(GetParam());
-    verify(listener);
-}
-
-// custom NV12
 G_TYPED_KERNEL(MyNV12toBGR, <GMat(GMat, GMat)>, "test.my_nv12_to_bgr") {
     static GMatDesc outMeta(GMatDesc in_y, GMatDesc in_uv) {
         return cv::gapi::imgproc::GNV12toBGR::outMeta(in_y, in_uv);
@@ -1692,122 +1660,270 @@ GAPI_TRANSFORM(Merge4Split4Transform, <GMat4(GMat, GMat, GMat, GMat)>,
     }
 };
 
-INSTANTIATE_TEST_CASE_P(Everything, PatternMatchingIntegration,
-    Values(
-        std::make_tuple(
-            [] () {
-                GMat in1, in2;
-                GMat bgr = MyNV12toBGR::on(in1, in2);
-                GMat out = cv::gapi::resize(bgr, cv::Size(100, 100));
-                return cv::GComputation(cv::GIn(in1, in2), cv::GOut(out));
-            },
-            [] (const KernelListener& l) {
-                ASSERT_EQ(1u, l.counts.size());
-                // called in original graph:
-                ASSERT_NE(l.counts.cend(), l.counts.find(MyNV12toBGR::id()));
-                ASSERT_EQ(1u, l.counts.at(MyNV12toBGR::id()));
-            },
-            cv::compile_args(cv::gapi::kernels<MyNV12toBGRImpl>()),
-            cv::compile_args(cv::gapi::kernels<MyNV12toBGRImpl, NV12Transform>())),
-        std::make_tuple(
-            [] () {
-                GMat in1, in2;
-                GMat bgr = cv::gapi::NV12toBGR(in1, in2);
-                GMat b, g, r;
-                std::tie(b, g, r) = cv::gapi::split3(bgr);
-                const auto resize = std::bind(&cv::gapi::resize, std::placeholders::_1,
-                    cv::Size(100, 100), 0, 0, cv::INTER_AREA);
-                GMat tmp1 = cv::gapi::resize(bgr, cv::Size(90, 90));
-                GMat tmp2 = cv::gapi::bitwise_not(cv::gapi::merge3(resize(b), resize(g), resize(r)));
-                GMat out = cv::gapi::add(
-                    cv::gapi::resize(cv::gapi::addC(tmp1, GScalar(10.0)), cv::Size(100, 100)),
-                    tmp2);
-                return cv::GComputation(cv::GIn(in1, in2), cv::GOut(out));
-            },
-            [] (const KernelListener& l) {
-                ASSERT_EQ(2u, l.counts.size());
-                // called in transformed graph:
-                ASSERT_NE(l.counts.cend(), l.counts.find(MyNV12toBGR::id()));
-                ASSERT_EQ(1u, l.counts.at(MyNV12toBGR::id()));
-                ASSERT_NE(l.counts.cend(), l.counts.find(MyInterleavedResize::id()));
-                ASSERT_EQ(1u, l.counts.at(MyInterleavedResize::id()));
-            },
-            cv::compile_args(),
-            cv::compile_args(cv::gapi::kernels<MyNV12toBGRImpl, MyInterleavedResizeImpl,
-                                               ResizeTransform, NV12TransformReversed>()))
-    ));
-
-INSTANTIATE_TEST_CASE_P(BasicE2E, PatternMatchingIntegration,
-    Combine(
-        Values([] () {
-            GMat in1, in2;
-            GMat bgr = MyNV12toBGR::on(in1, in2);
-            GMat resized = cv::gapi::resize(bgr, cv::Size(60, 60));
-            GMatP out = GToNCHW::on(resized);
-            return cv::GComputation(cv::GIn(in1, in2), cv::GOut(out));
-        }),
-        Values([] (const KernelListener& l) {
-            ASSERT_EQ(3u, l.counts.size());
-            // called in original graph:
-            ASSERT_NE(l.counts.cend(), l.counts.find(MyNV12toBGR::id()));
-            ASSERT_NE(l.counts.cend(), l.counts.find(GToNCHW::id()));
-            ASSERT_EQ(1u, l.counts.at(MyNV12toBGR::id()));
-            ASSERT_EQ(1u, l.counts.at(GToNCHW::id()));
-            // called in transformed graph:
-            ASSERT_NE(l.counts.cend(), l.counts.find(MyPlanarResize::id()));
-            ASSERT_EQ(1u, l.counts.at(MyPlanarResize::id()));
-        }),
-        Values(cv::compile_args(cv::gapi::kernels<MyNV12toBGRImpl, MyToNCHWImpl>())),
-        Values(  // NB: must work regardless of transformations order
-            cv::compile_args(
-                cv::gapi::kernels<MyPlanarResizeImpl, ChainTransform1, ChainTransform2>()),
-            cv::compile_args(
-                cv::gapi::kernels<ChainTransform2, ChainTransform1, MyPlanarResizeImpl>()))));
-
-INSTANTIATE_TEST_CASE_P(UnusedNodes, PatternMatchingIntegration,
-    Combine(
-        Values([] () {
-            GMat in1, in2;
-            GMat bgr = cv::gapi::NV12toBGR(in1, in2);
-            GMat b1, g1, r1;
-            std::tie(b1, g1, r1) = cv::gapi::split3(bgr);
-            // FIXME: easier way to call split4??
-            GMat merged4 = cv::gapi::merge4(b1, g1, r1, b1);
-            GMat b2, g2, r2, unused;
-            std::tie(b2, g2, r2, unused) = cv::gapi::split4(merged4);
-            GMat out = cv::gapi::merge3(b2, g2, r2);
-            return cv::GComputation(cv::GIn(in1, in2), cv::GOut(out));
-        }),
-        Values([] (const KernelListener& l) {
-            ASSERT_EQ(1u, l.counts.size());
-            // called in transformed graph:
-            ASSERT_NE(l.counts.cend(), l.counts.find(MySplit4::id()));
-            ASSERT_EQ(1u, l.counts.at(MySplit4::id()));
-        }),
-        Values(cv::compile_args()),
-        Values(
-            cv::compile_args(cv::gapi::kernels<MySplit4Impl, Split4Transform>()),
-            cv::compile_args(cv::gapi::kernels<MySplit4Impl, Split4Merge3Transform>()),
-            cv::compile_args(cv::gapi::kernels<MySplit4Impl, Merge4Split4Transform>())
-        )));
-
 // --------------------------------------------------------------------------------------
-// Bad arg integration tests (GCompiler-level)
+// Integration tests
 
-struct PatternMatchingIntegrationEndlessLoops :
-    TestWithParam<std::tuple<CompCreator, cv::GCompileArgs>> {};
-TEST_P(PatternMatchingIntegrationEndlessLoops, TestTransformationThrows) {
+// FIXME: check why this doesn't work
+TEST(PatternMatchingIntegrationBasic, OneResizeTransformationApplied)
+{
     cv::Size in_sz(640, 480);
     cv::Mat input(in_sz, CV_8UC3);
     cv::randu(input, cv::Scalar::all(0), cv::Scalar::all(100));
-    cv::Mat orig_output, transformed_output;
+    cv::Mat orig_graph_output, transformed_graph_output;
 
-    auto mainC = std::get<0>(GetParam())();  // get new copy with new Priv
-    auto args = std::get<1>(GetParam());
-    cv::gimpl::GCompiler compiler(mainC, cv::descr_of(cv::gin(input)), std::move(args));
+    auto orig_args = cv::compile_args();
+    auto transform_args = cv::compile_args(
+        cv::gapi::kernels<MyInterleavedResizeImpl, ResizeTransform>());
 
-    EXPECT_THROW(compiler.compile(), std::exception);  //  should throw here
+    auto& listener = getListener();
+    listener.counts.clear();  // clear counters before testing
+
+    const auto make_computation = [] () {
+        GMat in;
+        GMat b, g, r;
+        std::tie(b, g, r) = cv::gapi::split3(in);
+        const auto resize = std::bind(&cv::gapi::resize, std::placeholders::_1,
+            cv::Size(100, 100), 0, 0, cv::INTER_AREA);
+        GMat out = cv::gapi::merge3(resize(b), resize(g), resize(r));
+        return cv::GComputation(cv::GIn(in), cv::GOut(out));
+    };
+
+    {
+        // Run original graph
+        auto mainC = make_computation();
+        mainC.apply(cv::gin(input), cv::gout(orig_graph_output), std::move(orig_args));
+    }
+
+    // Generate transformed graph (passing transformations via compile args)
+    auto mainC = make_computation();  // get new copy with new Priv
+    mainC.apply(cv::gin(input), cv::gout(transformed_graph_output), std::move(transform_args));
+
+    // Compare
+    ASSERT_TRUE(AbsExact()(orig_graph_output, transformed_graph_output));
+
+    // Custom verification via listener
+    ASSERT_EQ(1u, listener.counts.size());
+    // called in transformed graph:
+    ASSERT_NE(listener.counts.cend(), listener.counts.find(MyInterleavedResize::id()));
+    ASSERT_EQ(1u, listener.counts.at(MyInterleavedResize::id()));
 }
+
+TEST(PatternMatchingIntegrationBasic, OneNV12toBGRTransformationApplied)
+{
+    cv::Size in_sz(640, 480);
+    cv::Mat y(in_sz, CV_8UC1), uv(cv::Size(in_sz.width / 2, in_sz.height / 2), CV_8UC2);
+    cv::randu(y, cv::Scalar::all(0), cv::Scalar::all(100));
+    cv::randu(y, cv::Scalar::all(100), cv::Scalar::all(200));
+    cv::Mat orig_graph_output, transformed_graph_output;
+
+    auto orig_args = cv::compile_args(cv::gapi::kernels<MyNV12toBGRImpl>());
+    auto transform_args = cv::compile_args(cv::gapi::kernels<NV12Transform>());
+
+    auto& listener = getListener();
+    listener.counts.clear();  // clear counters before testing
+
+    const auto make_computation = [] () {
+        GMat in1, in2;
+        GMat bgr = MyNV12toBGR::on(in1, in2);
+        GMat out = cv::gapi::resize(bgr, cv::Size(100, 100));
+        return cv::GComputation(cv::GIn(in1, in2), cv::GOut(out));
+    };
+
+    {
+        // Run original graph
+        auto mainC = make_computation();
+        mainC.apply(cv::gin(y, uv), cv::gout(orig_graph_output), std::move(orig_args));
+    }
+
+    // Generate transformed graph (passing transformations via compile args)
+    auto mainC = make_computation();  // get new copy with new Priv
+    mainC.apply(cv::gin(y, uv), cv::gout(transformed_graph_output), std::move(transform_args));
+
+    // Compare
+    ASSERT_TRUE(AbsExact()(orig_graph_output, transformed_graph_output));
+
+    // Custom verification via listener
+    ASSERT_EQ(1u, listener.counts.size());
+    // called in original graph:
+    ASSERT_NE(listener.counts.cend(), listener.counts.find(MyNV12toBGR::id()));
+    ASSERT_EQ(1u, listener.counts.at(MyNV12toBGR::id()));
+}
+
+TEST(PatternMatchingIntegrationBasic, TwoTransformationsApplied)
+{
+    cv::Size in_sz(640, 480);
+    cv::Mat y(in_sz, CV_8UC1), uv(cv::Size(in_sz.width / 2, in_sz.height / 2), CV_8UC2);
+    cv::randu(y, cv::Scalar::all(0), cv::Scalar::all(100));
+    cv::randu(y, cv::Scalar::all(100), cv::Scalar::all(200));
+    cv::Mat orig_graph_output, transformed_graph_output;
+
+    auto orig_args = cv::compile_args();
+    auto transform_args = cv::compile_args(
+        cv::gapi::kernels<MyNV12toBGRImpl, MyInterleavedResizeImpl, ResizeTransform,
+            NV12TransformReversed>());  // compile args with transformations
+
+    auto& listener = getListener();
+    listener.counts.clear();  // clear counters before testing
+
+    const auto make_computation = [] () {
+        GMat in1, in2;
+        GMat bgr = cv::gapi::NV12toBGR(in1, in2);
+        GMat b, g, r;
+        std::tie(b, g, r) = cv::gapi::split3(bgr);
+        const auto resize = std::bind(&cv::gapi::resize, std::placeholders::_1,
+            cv::Size(100, 100), 0, 0, cv::INTER_AREA);
+        GMat tmp1 = cv::gapi::resize(bgr, cv::Size(90, 90));
+        GMat tmp2 = cv::gapi::bitwise_not(cv::gapi::merge3(resize(b), resize(g), resize(r)));
+        GMat out = cv::gapi::add(
+            cv::gapi::resize(cv::gapi::addC(tmp1, GScalar(10.0)), cv::Size(100, 100)),
+            tmp2);
+        return cv::GComputation(cv::GIn(in1, in2), cv::GOut(out));
+    };
+
+    {
+        // Run original graph
+        auto mainC = make_computation();
+        mainC.apply(cv::gin(y, uv), cv::gout(orig_graph_output), std::move(orig_args));
+    }
+
+    // Generate transformed graph (passing transformations via compile args)
+    auto mainC = make_computation();  // get new copy with new Priv
+    mainC.apply(cv::gin(y, uv), cv::gout(transformed_graph_output), std::move(transform_args));
+
+    // Compare
+    ASSERT_TRUE(AbsExact()(orig_graph_output, transformed_graph_output));
+
+    // Custom verification via listener
+    ASSERT_EQ(2u, listener.counts.size());
+    // called in transformed graph:
+    ASSERT_NE(listener.counts.cend(), listener.counts.find(MyNV12toBGR::id()));
+    ASSERT_EQ(1u, listener.counts.at(MyNV12toBGR::id()));
+    ASSERT_NE(listener.counts.cend(), listener.counts.find(MyInterleavedResize::id()));
+    ASSERT_EQ(1u, listener.counts.at(MyInterleavedResize::id()));
+}
+
+struct PatternMatchingIntegrationE2E : testing::Test
+{
+    cv::GComputation makeComputation() {
+        GMat in1, in2;
+        GMat bgr = MyNV12toBGR::on(in1, in2);
+        GMat resized = cv::gapi::resize(bgr, cv::Size(60, 60));
+        GMatP out = GToNCHW::on(resized);
+        return cv::GComputation(cv::GIn(in1, in2), cv::GOut(out));
+    }
+
+    void runTest(cv::GCompileArgs&& transform_args) {
+        cv::Size in_sz(640, 480);
+        cv::Mat y(in_sz, CV_8UC1), uv(cv::Size(in_sz.width / 2, in_sz.height / 2), CV_8UC2);
+        cv::randu(y, cv::Scalar::all(0), cv::Scalar::all(100));
+        cv::randu(y, cv::Scalar::all(100), cv::Scalar::all(200));
+        cv::Mat orig_graph_output, transformed_graph_output;
+
+        auto& listener = getListener();
+        listener.counts.clear();  // clear counters before testing
+        {
+            // Run original graph
+            auto mainC = makeComputation();
+            mainC.apply(cv::gin(y, uv), cv::gout(orig_graph_output),
+                std::move(cv::compile_args(cv::gapi::kernels<MyNV12toBGRImpl, MyToNCHWImpl>())));
+        }
+
+        // Generate transformed graph (passing transformations via compile args)
+        auto mainC = makeComputation();  // get new copy with new Priv
+        mainC.apply(cv::gin(y, uv), cv::gout(transformed_graph_output), std::move(transform_args));
+
+        // Compare
+        ASSERT_TRUE(AbsExact()(orig_graph_output, transformed_graph_output));
+
+        // Custom verification via listener
+        ASSERT_EQ(3u, listener.counts.size());
+        // called in original graph:
+        ASSERT_NE(listener.counts.cend(), listener.counts.find(MyNV12toBGR::id()));
+        ASSERT_NE(listener.counts.cend(), listener.counts.find(GToNCHW::id()));
+        ASSERT_EQ(1u, listener.counts.at(MyNV12toBGR::id()));
+        ASSERT_EQ(1u, listener.counts.at(GToNCHW::id()));
+        // called in transformed graph:
+        ASSERT_NE(listener.counts.cend(), listener.counts.find(MyPlanarResize::id()));
+        ASSERT_EQ(1u, listener.counts.at(MyPlanarResize::id()));
+    }
+};
+
+TEST_F(PatternMatchingIntegrationE2E, ChainTransformationsApplied)
+{
+    runTest(cv::compile_args(
+        cv::gapi::kernels<MyPlanarResizeImpl, ChainTransform1, ChainTransform2>()));
+}
+
+TEST_F(PatternMatchingIntegrationE2E, ReversedChainTransformationsApplied)
+{
+    runTest(cv::compile_args(
+        cv::gapi::kernels<ChainTransform2, MyPlanarResizeImpl, ChainTransform1>()));
+}
+
+struct PatternMatchingIntegrationUnusedNodes : testing::Test
+{
+    cv::GComputation makeComputation() {
+        GMat in1, in2;
+        GMat bgr = cv::gapi::NV12toBGR(in1, in2);
+        GMat b1, g1, r1;
+        std::tie(b1, g1, r1) = cv::gapi::split3(bgr);
+        // FIXME: easier way to call split4??
+        GMat merged4 = cv::gapi::merge4(b1, g1, r1, b1);
+        GMat b2, g2, r2, unused;
+        std::tie(b2, g2, r2, unused) = cv::gapi::split4(merged4);
+        GMat out = cv::gapi::merge3(b2, g2, r2);
+        return cv::GComputation(cv::GIn(in1, in2), cv::GOut(out));
+    }
+
+    void runTest(cv::GCompileArgs&& transform_args) {
+        cv::Size in_sz(640, 480);
+        cv::Mat y(in_sz, CV_8UC1), uv(cv::Size(in_sz.width / 2, in_sz.height / 2), CV_8UC2);
+        cv::randu(y, cv::Scalar::all(0), cv::Scalar::all(100));
+        cv::randu(y, cv::Scalar::all(100), cv::Scalar::all(200));
+
+        cv::Mat orig_graph_output, transformed_graph_output;
+
+        auto& listener = getListener();
+        listener.counts.clear();  // clear counters before testing
+        {
+            // Run original graph
+            auto mainC = makeComputation();
+            mainC.apply(cv::gin(y, uv), cv::gout(orig_graph_output),
+                std::move(cv::compile_args(cv::gapi::kernels<MyNV12toBGRImpl, MyToNCHWImpl>())));
+        }
+
+        // Generate transformed graph (passing transformations via compile args)
+        auto mainC = makeComputation();  // get new copy with new Priv
+        mainC.apply(cv::gin(y, uv), cv::gout(transformed_graph_output), std::move(transform_args));
+
+        // Compare
+        ASSERT_TRUE(AbsExact()(orig_graph_output, transformed_graph_output));
+
+        // Custom verification via listener
+        ASSERT_EQ(1u, listener.counts.size());
+        // called in transformed graph:
+        ASSERT_NE(listener.counts.cend(), listener.counts.find(MySplit4::id()));
+        ASSERT_EQ(1u, listener.counts.at(MySplit4::id()));
+    }
+};
+
+TEST_F(PatternMatchingIntegrationUnusedNodes, SingleOpTransformApplied)
+{
+    runTest(cv::compile_args(cv::gapi::kernels<MySplit4Impl, Split4Transform>()));
+}
+
+TEST_F(PatternMatchingIntegrationUnusedNodes, TransformWithInternalUnusedNodeApplied)
+{
+    runTest(cv::compile_args(cv::gapi::kernels<MySplit4Impl, Split4Merge3Transform>()));
+}
+
+TEST_F(PatternMatchingIntegrationUnusedNodes, TransformWithOutputUnusedNodeApplied)
+{
+    runTest(cv::compile_args(cv::gapi::kernels<MySplit4Impl, Merge4Split4Transform>()));
+}
+
+// --------------------------------------------------------------------------------------
+// Bad arg integration tests (GCompiler-level)
 
 GAPI_TRANSFORM(EndlessLoopTransform1, <cv::GMat(cv::GMat)>, "pattern in substitute")
 {
@@ -1851,27 +1967,43 @@ GAPI_TRANSFORM(EndlessLoopTransformChain2, <cv::GMat(cv::GMat)>, "Custom Resize 
     }
 };
 
-// FIXME: add more tests for different kinds of loops (when the logic is there)
-INSTANTIATE_TEST_CASE_P(All, PatternMatchingIntegrationEndlessLoops,
-    Values(
-        std::make_tuple(
-            [] () {
-                GMat in;
-                GMat tmp = cv::gapi::resize(in, cv::Size(100, 100), 0, 0, cv::INTER_LINEAR);
-                GMat out = cv::gapi::bitwise_not(tmp);
-                return cv::GComputation(cv::GIn(in), cv::GOut(out));
-            },
-            cv::compile_args(cv::gapi::kernels<EndlessLoopTransform1>())
-        ),
-        std::make_tuple(
-            [] () {
-                GMat in;
-                GMat out = cv::gapi::resize(in, cv::Size(100, 100));
-                return cv::GComputation(cv::GIn(in), cv::GOut(out));
-            },
-            cv::compile_args(
-                cv::gapi::kernels<EndlessLoopTransformChain2, EndlessLoopTransformChain1>())
-        )
-    ));
+TEST(PatternMatchingIntegrationEndlessLoops, PatternInSubstituteOneTransform)
+{
+    cv::Size in_sz(640, 480);
+    cv::Mat input(in_sz, CV_8UC3);
+    cv::randu(input, cv::Scalar::all(0), cv::Scalar::all(100));
+
+    auto c = [] () {
+        GMat in;
+        GMat tmp = cv::gapi::resize(in, cv::Size(100, 100), 0, 0, cv::INTER_LINEAR);
+        GMat out = cv::gapi::bitwise_not(tmp);
+        return cv::GComputation(cv::GIn(in), cv::GOut(out));
+    }();
+
+    cv::gimpl::GCompiler compiler(c, cv::descr_of(cv::gin(input)),
+        cv::compile_args(cv::gapi::kernels<EndlessLoopTransform1>()));
+
+    EXPECT_THROW(compiler.compile(), std::exception);  //  should throw here
+}
+
+TEST(PatternMatchingIntegrationEndlessLoops, PatternInSubstituteDifferentTransforms)
+{
+    cv::Size in_sz(640, 480);
+    cv::Mat input(in_sz, CV_8UC3);
+    cv::randu(input, cv::Scalar::all(0), cv::Scalar::all(100));
+
+    auto c = [] () {
+        GMat in;
+        GMat out = cv::gapi::resize(in, cv::Size(100, 100));
+        return cv::GComputation(cv::GIn(in), cv::GOut(out));
+    }();
+
+    cv::gimpl::GCompiler compiler(c, cv::descr_of(cv::gin(input)),
+        cv::compile_args(
+            cv::gapi::kernels<EndlessLoopTransformChain2, EndlessLoopTransformChain1>()));
+
+    EXPECT_THROW(compiler.compile(), std::exception);  //  should throw here
+}
+
 
 } // namespace opencv_test
