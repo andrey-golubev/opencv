@@ -1825,7 +1825,7 @@ struct PatternMatchingIntegrationE2E : testing::Test
             // Run original graph
             auto mainC = makeComputation();
             mainC.apply(cv::gin(y, uv), cv::gout(orig_graph_output),
-                std::move(cv::compile_args(cv::gapi::kernels<MyNV12toBGRImpl, MyToNCHWImpl>())));
+                cv::compile_args(cv::gapi::kernels<MyNV12toBGRImpl, MyToNCHWImpl>()));
         }
 
         // Generate transformed graph (passing transformations via compile args)
@@ -1889,7 +1889,7 @@ struct PatternMatchingIntegrationUnusedNodes : testing::Test
             // Run original graph
             auto mainC = makeComputation();
             mainC.apply(cv::gin(y, uv), cv::gout(orig_graph_output),
-                std::move(cv::compile_args(cv::gapi::kernels<MyNV12toBGRImpl, MyToNCHWImpl>())));
+                cv::compile_args(cv::gapi::kernels<MyNV12toBGRImpl, MyToNCHWImpl>()));
         }
 
         // Generate transformed graph (passing transformations via compile args)
