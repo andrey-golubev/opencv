@@ -95,6 +95,11 @@ void checkTransformations(ade::passes::PassContext&,  // FIXME: context is unuse
 
     // FIXME: verify other types of endless loops - are there any other, though?
 
+    const auto empty = [] (const SubgraphMatch& m) {
+        return m.inputDataNodes.empty() && m.startOpNodes.empty()
+            && m.finishOpNodes.empty() && m.outputDataNodes.empty()
+            && m.inputTestDataNodes.empty() && m.outputTestDataNodes.empty();
+    };
     // 2. verify there are no patterns in substitutes
     for (size_t i = 0; i < size; ++i) {
         auto& p = patterns[i];
@@ -102,7 +107,7 @@ void checkTransformations(ade::passes::PassContext&,  // FIXME: context is unuse
             auto& s = substitutes[j];
 
             auto matchInSubstitute = findMatches(*p, *s);
-            if (!matchInSubstitute.empty()) {
+            if (!empty(matchInSubstitute)) {
                 std::stringstream ss;
                 ss << "Error: pattern (from transformation #" << i << ") detected inside substitute"
                       " (from transformation #" << j << ")";

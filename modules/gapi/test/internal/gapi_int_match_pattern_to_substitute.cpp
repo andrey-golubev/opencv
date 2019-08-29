@@ -391,13 +391,9 @@ TEST(PatternMatchingMatchPatternToSubsituteBadArg, WrongTypesMatchNotFound)
     // match
     cv::gimpl::GModel::Graph pgm(*pg);
     cv::gimpl::GModel::Graph sgm(*sg);
-    auto match = cv::gimpl::matchPatternToSubstitute(pgm, sgm,
-        pgm.metadata().get<cv::gimpl::Protocol>(), sgm.metadata().get<cv::gimpl::Protocol>());
-
-    // FIXME: check anything else?
-    EXPECT_FALSE(match.partialOk());
-    EXPECT_FALSE(match.ok());
-    EXPECT_TRUE(match.empty());
+    EXPECT_THROW(cv::gimpl::matchPatternToSubstitute(pgm, sgm,
+        pgm.metadata().get<cv::gimpl::Protocol>(), sgm.metadata().get<cv::gimpl::Protocol>()),
+        std::exception);
 }
 
 TEST(PatternMatchingMatchPatternToSubsituteBadArg, MisplacedInputsMatchNotFound)
@@ -421,13 +417,9 @@ TEST(PatternMatchingMatchPatternToSubsituteBadArg, MisplacedInputsMatchNotFound)
     // match
     cv::gimpl::GModel::Graph pgm(*pg);
     cv::gimpl::GModel::Graph sgm(*sg);
-    auto match = cv::gimpl::matchPatternToSubstitute(pgm, sgm,
-        pgm.metadata().get<cv::gimpl::Protocol>(), sgm.metadata().get<cv::gimpl::Protocol>());
-
-    // FIXME: check anything else?
-    EXPECT_FALSE(match.partialOk());
-    EXPECT_FALSE(match.ok());
-    EXPECT_TRUE(match.empty());
+    EXPECT_THROW(cv::gimpl::matchPatternToSubstitute(pgm, sgm,
+        pgm.metadata().get<cv::gimpl::Protocol>(), sgm.metadata().get<cv::gimpl::Protocol>()),
+        std::exception);
 }
 
 TEST(PatternMatchingMatchPatternToSubsituteBadArg, MisplacedOutputsMatchNotFound)
@@ -452,13 +444,9 @@ TEST(PatternMatchingMatchPatternToSubsituteBadArg, MisplacedOutputsMatchNotFound
     // match
     cv::gimpl::GModel::Graph pgm(*pg);
     cv::gimpl::GModel::Graph sgm(*sg);
-    auto match = cv::gimpl::matchPatternToSubstitute(pgm, sgm,
-        pgm.metadata().get<cv::gimpl::Protocol>(), sgm.metadata().get<cv::gimpl::Protocol>());
-
-    // FIXME: check anything else?
-    EXPECT_FALSE(match.partialOk());
-    EXPECT_FALSE(match.ok());
-    EXPECT_TRUE(match.empty());
+    EXPECT_THROW(cv::gimpl::matchPatternToSubstitute(pgm, sgm,
+        pgm.metadata().get<cv::gimpl::Protocol>(), sgm.metadata().get<cv::gimpl::Protocol>()),
+        std::exception);
 }
 
 TEST(PatternMatchingMatchPatternToSubsituteBadArg, DifferentInputsMatchNotFound)
@@ -486,13 +474,9 @@ TEST(PatternMatchingMatchPatternToSubsituteBadArg, DifferentInputsMatchNotFound)
     // match
     cv::gimpl::GModel::Graph pgm(*pg);
     cv::gimpl::GModel::Graph sgm(*sg);
-    auto match = cv::gimpl::matchPatternToSubstitute(pgm, sgm,
-        pgm.metadata().get<cv::gimpl::Protocol>(), sgm.metadata().get<cv::gimpl::Protocol>());
-
-    // FIXME: check anything else?
-    EXPECT_FALSE(match.partialOk());
-    EXPECT_FALSE(match.ok());
-    EXPECT_TRUE(match.empty());
+    EXPECT_THROW(cv::gimpl::matchPatternToSubstitute(pgm, sgm,
+        pgm.metadata().get<cv::gimpl::Protocol>(), sgm.metadata().get<cv::gimpl::Protocol>()),
+        std::exception);
 }
 
 TEST(PatternMatchingMatchPatternToSubsituteBadArg, MismatchedPatternAndSubstituteMatchNotFound)
@@ -517,13 +501,9 @@ TEST(PatternMatchingMatchPatternToSubsituteBadArg, MismatchedPatternAndSubstitut
     // match
     cv::gimpl::GModel::Graph pgm(*pg);
     cv::gimpl::GModel::Graph sgm(*sg);
-    auto match = cv::gimpl::matchPatternToSubstitute(pgm, sgm,
-        pgm.metadata().get<cv::gimpl::Protocol>(), sgm.metadata().get<cv::gimpl::Protocol>());
-
-    // FIXME: check anything else?
-    EXPECT_FALSE(match.partialOk());
-    EXPECT_FALSE(match.ok());
-    EXPECT_TRUE(match.empty());
+    EXPECT_THROW(cv::gimpl::matchPatternToSubstitute(pgm, sgm,
+        pgm.metadata().get<cv::gimpl::Protocol>(), sgm.metadata().get<cv::gimpl::Protocol>()),
+        std::exception);
 }
 
 } // namespace opencv_test

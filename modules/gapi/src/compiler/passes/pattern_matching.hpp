@@ -38,12 +38,6 @@ namespace gimpl {
 
         std::list<ade::NodeHandle> internalLayers;
 
-        bool empty() const {
-            return    inputDataNodes.empty() && startOpNodes.empty()
-                   && finishOpNodes.empty() && outputDataNodes.empty()
-                   && inputTestDataNodes.empty() && outputTestDataNodes.empty();
-        }
-
         bool ok() const {
             return    !inputDataNodes.empty() && !startOpNodes.empty()
                    && !finishOpNodes.empty() && !outputDataNodes.empty()

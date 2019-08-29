@@ -73,25 +73,20 @@ SubgraphMatch matchPatternToSubstitute(const Graph& pattern,
     const auto& substituteDataInputs = substituteP.in_nhs;
     const auto& substituteDataOutputs = substituteP.out_nhs;
 
-    // if number of data nodes doesn't match, abort
-    if (patternDataInputs.size() != substituteDataInputs.size()
-        || patternDataOutputs.size() != substituteDataOutputs.size()) {
-        return {};
-    }
+    // number of data nodes must be the same
+    GAPI_Assert(patternDataInputs.size() == substituteDataInputs.size());
+    GAPI_Assert(patternDataOutputs.size() == substituteDataOutputs.size());
 
     // for each pattern input we must find a corresponding substitute input
     auto matchedDataInputs = matchDataNodes(pattern, substitute, patternDataInputs,
         substituteDataInputs);
-    // if nothing found, abort
-    if (matchedDataInputs.empty()) {
-        return {};
-    }
+    // data inputs must be matched in all cases
+    GAPI_Assert(!matchedDataInputs.empty());
+
     auto matchedDataOutputs = matchDataNodes(pattern, substitute, patternDataOutputs,
         substituteDataOutputs);
-    // if nothing found, abort
-    if (matchedDataOutputs.empty()) {
-        return {};
-    }
+    // data outputs must be matched in all cases
+    GAPI_Assert(!matchedDataOutputs.empty());
 
     //---------------------------------------------------------------
     // Construct SubgraphMatch object
