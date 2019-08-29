@@ -13,7 +13,6 @@ namespace cv { namespace gimpl {
 namespace {
 using Graph = GModel::Graph;
 using Metadata = typename Graph::CMetadataT;
-using VisitedMatchings = std::list<std::pair<ade::NodeHandle, ade::NodeHandle>>;
 
 // Returns true if two DATA nodes are semantically identical:
 //  - both nodes have the same GShape
@@ -61,10 +60,10 @@ SubgraphMatch::M matchDataNodes(const Graph& pattern,
 }
 }  // anonymous namespace
 
-SubgraphMatch matchPatternToSubstitute(const cv::gimpl::GModel::Graph& pattern,
-                                       const cv::gimpl::GModel::Graph& substitute,
-                                       const cv::gimpl::Protocol& patternP,
-                                       const cv::gimpl::Protocol& substituteP)
+SubgraphMatch matchPatternToSubstitute(const Graph& pattern,
+                                       const Graph& substitute,
+                                       const Protocol& patternP,
+                                       const Protocol& substituteP)
 {
     //---------------------------------------------------------------
     // Match data nodes which start and end our pattern and substitute
